@@ -1,28 +1,25 @@
 import express from "express";
 import mongoose from "mongoose";
+import cors from "cors";
+import farmerRoutes from "./routes/farmerRoutes";
 import dotenv from "dotenv";
-import cors from "cors"; // ✅ import cors
-import router from "./routes/farmerRoutes";
 
 dotenv.config();
 
 const app = express();
 
-// ✅ Allow requests from your frontend
-app.use(cors({ origin: "http://localhost:5173" }));
-
+app.use(cors());
 app.use(express.json());
 
-// MongoDB connection
-mongoose
-  .connect(process.env.MONGODB_URI || "")
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.log(err));
+// ✅ mount route
+app.use("/api/farmers", farmerRoutes);
 
-// Routes
-app.use("/api/farmers", router);
+// ✅ Use the correct env variable
+mongoose.connect(process.env.MONGODB_URI as string)
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

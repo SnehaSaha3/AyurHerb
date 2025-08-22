@@ -1,13 +1,13 @@
 import { Router } from "express";
-import farmer from "../models/farmer";// ✅ relative path (.. goes one level up)
+import farmer from "../models/farmer"; // farmer model
 
 const router = Router();
 
-router.post("/", async (req, res) => {
+router.post("/register", async (req, res) => {
   try {
-    const Farmer = new farmer(req.body);
+    const Farmer = new farmer(req.body); // create new document
     await Farmer.save();
-    res.status(201).json(farmer);
+    res.status(201).json(Farmer); // return saved doc
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
