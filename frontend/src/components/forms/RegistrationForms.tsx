@@ -1,137 +1,111 @@
-import React, { useState } from "react"
-import axios from "axios"
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-interface RegistrationFormProps {
-  role: "farmer" | "company"
-  cropOptions?: string[]
-}
-
-function RegistrationForms({ role, cropOptions }: RegistrationFormProps) {
-  const [formData, setFormData] = useState<any>({
+export default function RegistrationForm() {
+  const [formData, setFormData] = useState({
     name: "",
     contact: "",
     address: "",
-    herb: cropOptions?.[0] || "",
-    // image: null,
-  })
+    herb: "",
+  });
 
+  const [message, setMessage] = useState("");
+  const navigate = useNavigate();
+
+  // ✅ handle input changes
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
-    const { name, value } = e.target
-    setFormData((prev: any) => ({ ...prev, [name]: value }))
-  }
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFormData((prev: any) => ({ ...prev, image: e.target.files![0] }))
-    }
-  }
-
+  // ✅ handle form submit
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
+    e.preventDefault();
     try {
-      const data = new FormData()
-      data.append("name", formData.name)
-      data.append("contact", formData.contact)
-      data.append("address", formData.address)
+      const res = await fetch("http://localhost:5000/api/farmers/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
 
-      if (role === "farmer") {
-        data.append("herb", formData.herb)
-        if (formData.image) {
-          data.append("image", formData.image)
-        }
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Something went wrong");
       }
 
-      // 👇 send request to backend
-      const endpoint =
-        role === "farmer"
-          ? "http://localhost:5000/api/farmers/register"
-          : "http://localhost:5000/api/companies/register"
+      const data = await res.json();
 
-      const res = await axios.post(endpoint, data, {
-        headers: { "Content-Type": "multipart/form-data" },
-      })
+      // ✅ Save farmer data so Dashboard can access it
+      localStorage.setItem("farmer", JSON.stringify(data));
 
-      alert(`${role} registered successfully! ✅`)
-      console.log(res.data)
-    } catch (error: any) {
-      console.error(error)
-      alert("❌ Registration failed")
+      setMessage("✅ Registration successful!");
+      setFormData({ name: "", contact: "", address: "", herb: "" });
+
+      // ✅ redirect after 1 sec so user sees success message
+      setTimeout(() => navigate("/farmer-dashboard"), 1000);
+    } catch (err: any) {
+      setMessage("❌ " + err.message);
     }
-  }
+  };
 
   return (
-    <div className="max-w-lg mx-auto bg-white shadow-lg p-6 rounded-xl">
-      <h2 className="text-2xl font-bold mb-4 text-green-700 capitalize">
-        {role} Registration
-      </h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="p-6 max-w-md mx-auto bg-white shadow-md rounded">
+      <h2 className="text-xl font-bold mb-4">Farmer Registration</h2>
+      <form onSubmit={handleSubmit} className="space-y-3">
         <input
           type="text"
           name="name"
-          placeholder={`${role} Name`}
+          placeholder="Farmer Name"
           value={formData.name}
           onChange={handleChange}
-          className="w-full border rounded-lg p-2"
+          className="border p-2 w-full rounded"
           required
         />
-
         <input
-          type="tel"
+          type="text"
           name="contact"
           placeholder="Contact Number"
           value={formData.contact}
           onChange={handleChange}
-          className="w-full border rounded-lg p-2"
+          className="border p-2 w-full rounded"
           required
         />
-
         <input
           type="text"
           name="address"
-          placeholder="Address / Village / Location"
+          placeholder="Address"
           value={formData.address}
           onChange={handleChange}
-          className="w-full border rounded-lg p-2"
+          className="border p-2 w-full rounded"
           required
         />
 
-        {/* Farmer-specific fields */}
-        {role === "farmer" && cropOptions && (
-          <>
-            <select
-              name="herb"
-              value={formData.herb}
-              onChange={handleChange}
-              className="w-full border rounded-lg p-2"
-            >
-              {cropOptions.map((crop) => (
-                <option key={crop} value={crop}>
-                  {crop}
-                </option>
-              ))}
-            </select>
-
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="w-full border rounded-lg p-2"
-            />
-          </>
-        )}
+        {/* ✅ Dropdown for herbs */}
+        <select
+          name="herb"
+          value={formData.herb}
+          onChange={handleChange}
+          className="border p-2 w-full rounded"
+          required
+        >
+          <option value="">-- Select Herb --</option>
+          <option value="Tulsi">Tulsi</option>
+          <option value="Ashwagandha">Ashwagandha</option>
+          <option value="Neem">Neem</option>
+          <option value="Brahmi">Brahmi</option>
+          <option value="Aloe Vera">Aloe Vera</option>
+        </select>
 
         <button
           type="submit"
-          className="w-full bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg"
+          className="bg-green-600 text-white px-4 py-2 rounded"
         >
-          Register {role}
+          Register
         </button>
       </form>
+      {message && <p className="mt-3 text-red-600">{message}</p>}
     </div>
-  )
+  );
 }
-
-export default RegistrationForms

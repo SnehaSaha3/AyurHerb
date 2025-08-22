@@ -1,19 +1,20 @@
-import mongoose, { Document, Schema } from "mongoose"
+import mongoose, { Schema, Document } from "mongoose";
+import { v4 as uuidv4 } from "uuid"
 
-export interface IFarmer extends Document {
+interface IFarmer extends Document {
+  farmerId: string;
   name: string;
   contact: string;
   address: string;
   herb: string;
-  image?: string;
 }
 
-const FarmerSchema: Schema = new Schema({
+const farmerSchema = new Schema<IFarmer>({
+  farmerId: { type: String, default: uuidv4 }, 
   name: { type: String, required: true },
   contact: { type: String, required: true },
   address: { type: String, required: true },
   herb: { type: String, required: true },
-  image: { type: String },
 });
 
-export default mongoose.model<IFarmer>("farmer", FarmerSchema);
+export default mongoose.model<IFarmer>("Farmer", farmerSchema);

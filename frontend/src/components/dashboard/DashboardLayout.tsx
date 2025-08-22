@@ -4,8 +4,8 @@ import type { JSX } from 'react'
 
 
 type DashboardProps ={
-    userType: "farmer" | "company"
-    links: {name: string; path: string}[]
+  userType: string  // instead of "farmer" | "company"
+  links: {name: string; path: string}[]
 }
 
 function DashboardLayout({ userType, links }: DashboardProps) {
