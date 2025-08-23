@@ -10,9 +10,10 @@ export default function RegistrationForm() {
   });
 
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [registeredFarmer, setRegisteredFarmer] = useState<any>(null);
   const navigate = useNavigate();
 
-  // ✅ handle input changes
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -20,9 +21,9 @@ export default function RegistrationForm() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // ✅ handle form submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const res = await fetch("http://localhost:5000/api/farmers/register", {
         method: "POST",
@@ -35,18 +36,21 @@ export default function RegistrationForm() {
         throw new Error(error.error || "Something went wrong");
       }
 
-      const data = await res.json();
+      const data = await res.json(); // ✅ contains { message, farmer, token }
 
-      // ✅ Save farmer data so Dashboard can access it
-      localStorage.setItem("farmer", JSON.stringify(data));
+      // ✅ Save farmer & token separately
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("farmer", JSON.stringify(data.farmer));
 
       setMessage("✅ Registration successful!");
+      setRegisteredFarmer(data.farmer); // ✅ correct object
       setFormData({ name: "", contact: "", address: "", herb: "" });
 
-      // ✅ redirect after 1 sec so user sees success message
-      setTimeout(() => navigate("/farmer-dashboard"), 1000);
+      setTimeout(() => navigate("/farmer-dashboard"), 1500);
     } catch (err: any) {
       setMessage("❌ " + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -82,7 +86,6 @@ export default function RegistrationForm() {
           required
         />
 
-        {/* ✅ Dropdown for herbs */}
         <select
           name="herb"
           value={formData.herb}
@@ -100,12 +103,24 @@ export default function RegistrationForm() {
 
         <button
           type="submit"
-          className="bg-green-600 text-white px-4 py-2 rounded"
+          className="bg-green-600 text-white px-4 py-2 rounded w-full"
+          disabled={loading}
         >
-          Register
+          {loading ? "Registering..." : "Register"}
         </button>
       </form>
+
       {message && <p className="mt-3 text-red-600">{message}</p>}
+
+      {registeredFarmer && (
+        <div className="mt-4 p-3 border rounded bg-gray-100">
+          <h3 className="font-semibold">👩‍🌾 Registered Farmer Details:</h3>
+          <p><strong>Name:</strong> {registeredFarmer.name}</p>
+          <p><strong>Contact:</strong> {registeredFarmer.contact}</p>
+          <p><strong>Address:</strong> {registeredFarmer.address}</p>
+          <p><strong>Herb:</strong> {registeredFarmer.herb}</p>
+        </div>
+      )}
     </div>
   );
 }

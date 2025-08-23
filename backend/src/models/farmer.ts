@@ -2,11 +2,13 @@ import mongoose, { Schema, Document } from "mongoose";
 import { v4 as uuidv4 } from "uuid"
 
 interface IFarmer extends Document {
+  _id: mongoose.Types.ObjectId;   // ✅ Explicitly typed _id
   farmerId: string;
   name: string;
   contact: string;
   address: string;
   herb: string;
+  __v?: number;
 }
 
 const farmerSchema = new Schema<IFarmer>({

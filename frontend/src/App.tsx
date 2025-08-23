@@ -4,20 +4,26 @@ import Homee from "./components/Home"
 import RegistrationPage from "./components/pages/Registration"
 import FarmerForm from "./components/forms/FarmerForm"
 import FarmerDashboard from "./components/dashboard/FarmerDashboard"
+import Profile from "./components/pages/Profile"
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<NavPages />}>
-        <Route index element={<Homee />} /> 
+        <Route index element={<Homee />} />
         <Route path="registration" element={<RegistrationPage />} />
         <Route path="farmer-registration" element={<FarmerForm />} />
       </Route>
-       <Route path="/farmer-dashboard" element={<FarmerDashboard />} />
+
+      {/* Nested farmer dashboard */}
+      <Route path="/farmer-dashboard" element={<FarmerDashboard />}>
+        <Route path="profile" element={<Profile />} />
+      </Route>
     </Routes>
-  );
+  )
 }
 
 export default App
+
 
 
