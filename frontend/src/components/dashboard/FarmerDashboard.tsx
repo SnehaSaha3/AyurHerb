@@ -2,32 +2,31 @@ import { useEffect, useState } from "react"
 import DashboardLayout from "./DashboardLayout"
 import axios from "axios"
 import { Outlet } from "react-router-dom"
+
 function FarmerDashboard() {
     const [farmerName, setFarmerName] = useState("")
 
     useEffect(() => {
         const fetchFarmer = async () => {
             try {
-                // Get the token from localStorage
+                
                 const token = localStorage.getItem("token")
                 if (!token) {
                     console.error("No token found, please login again")
                     return
                 }
 
-                // Send request with token in Authorization header
-                const res = await axios.get("http://localhost:5000/api/farmers", {
+                
+                const res = await axios.get("http://localhost:5000/api/farmers/me", {
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
                 })
 
              
-                if (res.data && res.data.farmer) {
-                    setFarmerName(res.data.farmer.name)
-                } else if (res.data && res.data.name) {
-                    setFarmerName(res.data.name)
-                } else {
+                if (res.data && res.data.name) {
+                   setFarmerName(res.data.name)
+                }  else {
                     console.error("Unexpected response format:", res.data)
                 }
 

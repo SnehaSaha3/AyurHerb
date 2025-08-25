@@ -1,22 +1,26 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 
-export default function RegistrationForm() {
+interface RegistrationFormProps {
+  role: "farmer" | "company"
+  cropOptions?: string[]
+}
+
+export default function RegistrationForms({ role, cropOptions }: RegistrationFormProps) {
   const [formData, setFormData] = useState({
     name: "",
     contact: "",
+    email: "",
     address: "",
     herb: "",
   });
 
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [registeredFarmer, setRegisteredFarmer] = useState<any>(null);
+  const [registeredData, setRegisteredData] = useState<any>(null);
   const navigate = useNavigate();
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -25,7 +29,12 @@ export default function RegistrationForm() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/farmers/register", {
+      const url =
+        role === "farmer"
+          ? "http://localhost:5000/api/farmers/register"
+          : "http://localhost:5000/api/companies/register";
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -36,17 +45,16 @@ export default function RegistrationForm() {
         throw new Error(error.error || "Something went wrong");
       }
 
-      const data = await res.json(); // ✅ contains { message, farmer, token }
+      const data = await res.json();
 
-      // ✅ Save farmer & token separately
       localStorage.setItem("token", data.token);
-      localStorage.setItem("farmer", JSON.stringify(data.farmer));
+      localStorage.setItem(role, JSON.stringify(data[role])); // save as farmer or company
 
       setMessage("✅ Registration successful!");
-      setRegisteredFarmer(data.farmer); // ✅ correct object
-      setFormData({ name: "", contact: "", address: "", herb: "" });
+      setRegisteredData(data[role]);
+      setFormData({ name: "", contact: "", email:"", address: "", herb: "" });
 
-      setTimeout(() => navigate("/farmer-dashboard"), 1500);
+      setTimeout(() => navigate(`/${role}-dashboard`), 1500);
     } catch (err: any) {
       setMessage("❌ " + err.message);
     } finally {
@@ -56,17 +64,21 @@ export default function RegistrationForm() {
 
   return (
     <div className="p-6 max-w-md mx-auto bg-white shadow-md rounded">
-      <h2 className="text-xl font-bold mb-4">Farmer Registration</h2>
+      <h2 className="text-xl font-bold mb-4">
+        {role === "farmer" ? "Farmer Registration" : "Company Registration"}
+      </h2>
+
       <form onSubmit={handleSubmit} className="space-y-3">
         <input
           type="text"
           name="name"
-          placeholder="Farmer Name"
+          placeholder={role === "farmer" ? "Farmer Name" : "Company Name"}
           value={formData.name}
           onChange={handleChange}
           className="border p-2 w-full rounded"
           required
         />
+
         <input
           type="text"
           name="contact"
@@ -76,6 +88,17 @@ export default function RegistrationForm() {
           className="border p-2 w-full rounded"
           required
         />
+
+        <input
+          type="text"
+          name="email"
+          placeholder="Email"
+          value={formData.email}
+          onChange={handleChange}
+          className="border p-2 w-full rounded"
+          required
+        />
+
         <input
           type="text"
           name="address"
@@ -86,20 +109,22 @@ export default function RegistrationForm() {
           required
         />
 
-        <select
-          name="herb"
-          value={formData.herb}
-          onChange={handleChange}
-          className="border p-2 w-full rounded"
-          required
-        >
-          <option value="">-- Select Herb --</option>
-          <option value="Tulsi">Tulsi</option>
-          <option value="Ashwagandha">Ashwagandha</option>
-          <option value="Neem">Neem</option>
-          <option value="Brahmi">Brahmi</option>
-          <option value="Aloe Vera">Aloe Vera</option>
-        </select>
+        {role === "farmer" && (
+          <select
+            name="herb"
+            value={formData.herb}
+            onChange={handleChange}
+            className="border p-2 w-full rounded"
+            required
+          >
+            <option value="">-- Select Herb --</option>
+            {cropOptions?.map((crop) => (
+              <option key={crop} value={crop}>
+                {crop}
+              </option>
+            ))}
+          </select>
+        )}
 
         <button
           type="submit"
@@ -112,15 +137,18 @@ export default function RegistrationForm() {
 
       {message && <p className="mt-3 text-red-600">{message}</p>}
 
-      {registeredFarmer && (
+      {registeredData && (
         <div className="mt-4 p-3 border rounded bg-gray-100">
-          <h3 className="font-semibold">👩‍🌾 Registered Farmer Details:</h3>
-          <p><strong>Name:</strong> {registeredFarmer.name}</p>
-          <p><strong>Contact:</strong> {registeredFarmer.contact}</p>
-          <p><strong>Address:</strong> {registeredFarmer.address}</p>
-          <p><strong>Herb:</strong> {registeredFarmer.herb}</p>
+          <h3 className="font-semibold">
+            {role === "farmer" ? "👩‍🌾 Registered Farmer Details:" : "🏢 Registered Company Details:"}
+          </h3>
+          <p><strong>Name:</strong> {registeredData.name}</p>
+          <p><strong>Contact:</strong> {registeredData.contact}</p>
+          <p><strong>Email:</strong> {registeredData.email}</p>
+          <p><strong>Address:</strong> {registeredData.address}</p>
+          {role === "farmer" && <p><strong>Herb:</strong> {registeredData.herb}</p>}
         </div>
       )}
     </div>
-  );
+  )
 }
