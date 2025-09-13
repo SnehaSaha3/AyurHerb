@@ -1,34 +1,55 @@
-import { Request, Response } from "express"
-import farmer from "../models/farmer"
-import jwt from "jsonwebtoken"
-import { sendRegistrationEmail } from "../services/EmailService"
+import { Request, Response } from "express";
+import Farmer from "../models/farmer";
+import { sendRegistrationEmail } from "../services/EmailService";
+import jwt from "jsonwebtoken";
+import { ethers } from "ethers";
 
-// Register Farmer and Generate Token + Send Email
 export const registerFarmer = async (req: Request, res: Response) => {
   try {
     const { name, contact, email, address, herb } = req.body;
 
-    
-    const newFarmer = new farmer({
+    // ✅ Generate blockchain wallet
+    const wallet = ethers.Wallet.createRandom();
+
+    // ✅ Create farmer with wallet + default crop
+    const newFarmer = new Farmer({
       name,
       contact,
       email,
       address,
       herb,
+      walletAddress: wallet.address,
+      privateKey: wallet.privateKey, // ⚠️ store securely in real-world apps
+      crops: [
+        {
+          cropId: "0", // dummy/default id
+          cropName: "Default Crop",
+          location: { lat: 0, lng: 0 },
+          season: "N/A",
+          soilType: "N/A",
+        },
+      ],
     });
 
     await newFarmer.save();
 
-    
+    // ✅ Send registration email
     if (email) {
       await sendRegistrationEmail(email, name);
     }
 
-   
+    // ✅ Generate JWT (safer payload)
+    if (!process.env.JWT_SECRET) {
+      throw new Error("JWT_SECRET is not defined in environment variables");
+    }
+
     const token = jwt.sign(
-      { farmerId: newFarmer._id },
-      process.env.JWT_SECRET as string,
-      { expiresIn: "1h" }
+      {
+        farmerId: newFarmer._id,
+        walletAddress: newFarmer.walletAddress,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" } // longer validity (can change as per need)
     );
 
     res.status(201).json({
@@ -38,16 +59,6 @@ export const registerFarmer = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Registration Error:", error);
-    res.status(500).json({ error: "Failed to register farmer", details: error })
+    res.status(500).json({ error: "Failed to register farmer", details: error });
   }
 };
-
-
-export const getFarmers = async (req: Request, res: Response) => {
-  try {
-    const farmers = await farmer.find()
-    res.status(200).json(farmers)
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch farmers", details: error })
-  }
-}

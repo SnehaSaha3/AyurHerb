@@ -17,7 +17,7 @@ function FarmerDashboard() {
                 }
 
                 
-                const res = await axios.get("http://localhost:5000/api/farmers/me", {
+                const res = await axios.get("http://localhost:5000/api/farmers/farmer-dashboard", {
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
@@ -40,8 +40,8 @@ function FarmerDashboard() {
 
     const farmerLinks = [
         { name: "Home", path: "" },
-        { name: "My Crops", path: "" },
-        { name: "Geo Tagging", path: "" },
+        { name: "My Crops", path: "/farmer-dashboard/crops" },
+        { name: "Geo Tagging", path: "/farmer-dashboard/geotagged" },
         { name: "Profile", path: "/farmer-dashboard/profile"}
     ]
 

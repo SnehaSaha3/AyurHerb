@@ -1,86 +1,78 @@
-import { Router, Request, Response } from "express"
-import jwt from "jsonwebtoken"
-import farmer from "../models/farmer"
-import { authMiddleware } from "../middlewares/authMiddleware"
-import {sendRegistrationEmail} from "../services/EmailService"
-const router = Router()
+import { Router, Request, Response } from "express";
+import jwt from "jsonwebtoken";
+import Farmer from "../models/farmer";
+import { authMiddleware } from "../middlewares/authMiddleware";
+import { sendRegistrationEmail } from "../services/EmailService";
+import { ethers } from "ethers";
 
+const router = Router();
 
-// Farmer Register
-
+// --- Register Farmer ---
 router.post("/register", async (req: Request, res: Response) => {
   try {
-    const Farmer = new farmer(req.body)
-    await Farmer.save() 
+    const { name, contact, email, address, herb } = req.body;
 
-    // Generate JWT token with farmer's MongoDB _id
+    // Generate blockchain wallet
+    const wallet = ethers.Wallet.createRandom();
+
+    const newFarmer = new Farmer({
+      name,
+      contact,
+      email,
+      address,
+      herb,
+      walletAddress: wallet.address,
+      privateKey: wallet.privateKey, // ⚠️ encrypt in prod
+      crops: [],
+    });
+
+    await newFarmer.save();
+
     const token = jwt.sign(
-      { farmerId: Farmer._id.toString() },
+      { farmerId: newFarmer._id, walletAddress: newFarmer.walletAddress },
       process.env.JWT_SECRET as string,
-      { expiresIn: "1d" }
-    )
+      { expiresIn: "7d" }
+    );
 
-    // Send registration email
-    if (Farmer.email) {
-      await sendRegistrationEmail(Farmer.email, Farmer.name)
-     
+    if (newFarmer.email) {
+      await sendRegistrationEmail(newFarmer.email, newFarmer.name);
     }
 
-    res.status(201).json({ Farmer, token })
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message })
-  }
-})
-
-
-// Farmer Profile (Protected)
-
-router.get("/profile", async (req: Request, res: Response) => {
-  try {
-    const token = req.headers.authorization?.split(" ")[1]
-    if (!token) {
-      return res.status(401).json({ error: "No token provided" });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
-      farmerId: string
-    }
-
-    const Farmer = await farmer.findById(decoded.farmerId)
-    if (!Farmer) {
-      return res.status(404).json({ error: "Farmer not found" })
-    }
-
-    res.json(Farmer)
-  } catch (err) {
-    res.status(401).json({ error: "Invalid or expired token" })
-  }
-})
-
-
-// Get Farmer by ID (Public)
-
-router.get("/:_id", async (req: Request, res: Response) => {
-  try {
-    const Farmer = await farmer.findById(req.params.id)
-    if (!Farmer) {
-      return res.status(404).json({ error: "Farmer not found" })
-    }
-    res.json(Farmer)
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message })
-  }
-})
-
-// return logged-in farmer
-router.get("/me", authMiddleware, async (req: any, res) => {
-  try {
-    const Farmer = await farmer.findById(req.user.farmerId)  // ✅ use farmerId
-    if (!Farmer) return res.status(404).json({ error: "Farmer not found" })
-    res.json(Farmer)
+    res.status(201).json({
+      farmer: {
+        id: newFarmer._id,
+        name: newFarmer.name,
+        email: newFarmer.email,
+        walletAddress: newFarmer.walletAddress,
+        crops: newFarmer.crops,
+      },
+      token,
+    });
   } catch (err: any) {
-    res.status(500).json({ error: "Server error" })
+    res.status(400).json({ error: err.message });
   }
-})
+});
 
-export default router
+// --- Farmer Profile (Protected) ---
+router.get("/profile", authMiddleware, async (req: any, res: Response) => {
+  try {
+    const farmer = await Farmer.findById(req.user.farmerId);
+    if (!farmer) return res.status(404).json({ error: "Farmer not found" });
+    res.json(farmer);
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
+// --- Get current farmer ---
+router.get("/me", authMiddleware, async (req: any, res: Response) => {
+  try {
+    const farmer = await Farmer.findById(req.user.farmerId);
+    if (!farmer) return res.status(404).json({ error: "Farmer not found" });
+    res.json(farmer);
+  } catch {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+export default router;

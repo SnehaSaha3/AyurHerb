@@ -3,6 +3,7 @@ import mongoose from "mongoose"
 import cors from "cors"
 import farmerRoutes from "./routes/farmerRoutes"
 import dotenv from "dotenv"
+import cropRoutes from "./routes/cropRoutes"
 
 
 dotenv.config()
@@ -15,6 +16,7 @@ console.log("JWT_Secret:", process.env.JWT_SECRET)
 
 
 app.use("/api/farmers", farmerRoutes)
+app.use("/api/crops", cropRoutes);
 
 
 
