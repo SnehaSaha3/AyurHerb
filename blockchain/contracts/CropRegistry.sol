@@ -4,19 +4,19 @@ pragma solidity ^0.8.28;
 contract CropRegistry {
     struct Crop {
         uint256 id;
-        string name;     
-        string area;     
-        string season;   
-        string soil;     
-        string lat;      
-        string lng;      
+        string name;
+        string area;
+        string season;
+        string soil;
+        int256 lat;       // <-- use int256, not string
+        int256 lng;       // <-- use int256, not string
         uint256 createdAt;
         uint256 updatedAt;
-        address farmer;  // ✅ who owns this crop
+        address farmer;
     }
 
     mapping(uint256 => Crop) public crops;
-    mapping(address => uint256[]) public farmerCrops; // ✅ farmer → cropIds
+    mapping(address => uint256[]) public farmerCrops;
     uint256 public cropCount;
 
     event CropAdded(uint256 indexed cropId, address indexed farmer, string name);
@@ -27,23 +27,24 @@ contract CropRegistry {
         string memory _area,
         string memory _season,
         string memory _soil,
-        string memory _lat,
-        string memory _lng
+        int256 _lat,      // <-- add underscore here
+        int256 _lng       // <-- add underscore here
     ) public returns (uint256 cropId, bool isNew) {
-        // Simple new crop logic (one farmer can have multiple crops)
         cropId = cropCount;
+
         crops[cropId] = Crop({
             id: cropId,
             name: _name,
             area: _area,
             season: _season,
             soil: _soil,
-            lat: _lat,
-            lng: _lng,
+            lat: _lat,     // <-- now matches parameter
+            lng: _lng,     // <-- now matches parameter
             createdAt: block.timestamp,
             updatedAt: block.timestamp,
-            farmer: msg.sender // ✅ farmer wallet from tx
+            farmer: msg.sender
         });
+
         farmerCrops[msg.sender].push(cropId);
         cropCount++;
 
@@ -51,9 +52,7 @@ contract CropRegistry {
         return (cropId, true);
     }
 
-    function getCropsByFarmer(address _farmer) 
-        public view returns (Crop[] memory) 
-    {
+    function getCropsByFarmer(address _farmer) public view returns (Crop[] memory) {
         uint256[] memory ids = farmerCrops[_farmer];
         Crop[] memory list = new Crop[](ids.length);
         for (uint256 i = 0; i < ids.length; i++) {
@@ -75,4 +74,3 @@ contract CropRegistry {
         return list;
     }
 }
-

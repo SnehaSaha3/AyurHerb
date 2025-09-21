@@ -75,4 +75,24 @@ router.get("/me", authMiddleware, async (req: any, res: Response) => {
   }
 });
 
+
+// 👉 NEW alias for dashboard
+router.get("/farmer-dashboard", authMiddleware, async (req: any, res: Response) => {
+  try {
+    const farmer = await Farmer.findById(req.user.farmerId);
+    if (!farmer) return res.status(404).json({ error: "Farmer not found" });
+
+    // Send only what your dashboard needs
+    res.json({
+      id: farmer._id,
+      name: farmer.name,
+      email: farmer.email,
+      walletAddress: farmer.walletAddress,
+      crops: farmer.crops,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load farmer", details: err });
+  }
+});
+
 export default router;
