@@ -1,40 +1,39 @@
-import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import axios from "axios";
+import { useEffect, useState } from "react"
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
+import "leaflet/dist/leaflet.css"
+import axios from "axios"
 
 interface Crop {
-  _id?: string;
-  cropId?: string;
-  cropName: string;
-  soilType?: string;
-  location?: { lat: number; lng: number };
-  season?: string;
-  farmerName?: string;
-  farmerId?: string;
-  source?: string;
+  _id?: string
+  cropId?: string
+  cropName: string
+  soilType?: string
+  location?: { lat: number; lng: number }
+  season?: string
+  farmerName?: string
+  farmerId?: string
+  source?: string
 }
 
 /** Component to dynamically update map center */
 function MapUpdater({ center }: { center: [number, number] }) {
-  const map = useMap();
+  const map = useMap()
   useEffect(() => {
-    if (center[0] && center[1]) map.setView(center, map.getZoom());
-  }, [center, map]);
-  return null;
+    if (center[0] && center[1]) map.setView(center, map.getZoom())
+  }, [center, map])
+  return null
 }
 
 export default function CropMap() {
-  const [crops, setCrops] = useState<Crop[]>([]);
-  const [selectedFarmer, setSelectedFarmer] = useState<{ id: string; name: string } | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([26.2, 92.93]);
-
+  const [crops, setCrops] = useState<Crop[]>([])
+  const [selectedFarmer, setSelectedFarmer] = useState<{ id: string; name: string } | null>(null)
+  const [mapCenter, setMapCenter] = useState<[number, number]>([26.2, 92.93])
   useEffect(() => {
     const fetchCrops = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/crops");
+        const res = await axios.get("http://localhost:5000/api/crops")
         if (Array.isArray(res.data.crops)) {
-          const parsedCrops: Crop[] = [];
+          const parsedCrops: Crop[] = []
 
           for (const crop of res.data.crops as Crop[]) {
             if (crop && crop.location) {
@@ -44,30 +43,30 @@ export default function CropMap() {
                   lat: Number(crop.location.lat),
                   lng: Number(crop.location.lng),
                 },
-              });
+              })
             }
           }
 
-          setCrops(parsedCrops);
+          setCrops(parsedCrops)
 
           // Center map on first valid location
           const firstValid = parsedCrops.find(
             (c) => c.location && c.location.lat !== 0 && c.location.lng !== 0
-          );
+          )
           if (firstValid?.location) {
-            setMapCenter([firstValid.location.lat, firstValid.location.lng]);
+            setMapCenter([firstValid.location.lat, firstValid.location.lng])
           }
         } else {
-          setCrops([]);
+          setCrops([])
         }
       } catch (err) {
-        console.error("Error fetching crops:", err);
-        setCrops([]);
+        console.error("Error fetching crops:", err)
+        setCrops([])
       }
-    };
+    }
 
-    fetchCrops();
-  }, []);
+    fetchCrops()
+  }, [])
 
   return (
     <div className="w-full h-[600px] md:h-[80vh] relative">
@@ -119,7 +118,7 @@ export default function CropMap() {
                 </Popup>
               </Marker>
             )
-          );
+          )
         })}
       </MapContainer>
 
@@ -149,5 +148,5 @@ export default function CropMap() {
         </div>
       )}
     </div>
-  );
+  )
 }

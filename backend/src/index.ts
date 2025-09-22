@@ -4,6 +4,7 @@ import cors from "cors"
 import farmerRoutes from "./routes/farmerRoutes"
 import dotenv from "dotenv"
 import cropRoutes from "./routes/cropRoutes"
+import weatherRoutes from "./routes/weatherRoutes"
 
 
 dotenv.config()
@@ -17,7 +18,7 @@ console.log("JWT_Secret:", process.env.JWT_SECRET)
 
 app.use("/api/farmers", farmerRoutes)
 app.use("/api/crops", cropRoutes);
-
+app.use("/api/weather", weatherRoutes);
 
 
 

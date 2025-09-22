@@ -39,7 +39,7 @@ function FarmerDashboard() {
     
 
     const farmerLinks = [
-        { name: "Home", path: "" },
+        { name: "Home", path: "/farmer-dashboard" },
         { name: "My Crops", path: "/farmer-dashboard/crops" },
         { name: "Geo Tagging", path: "/farmer-dashboard/geotagged" },
         { name: "Profile", path: "/farmer-dashboard/profile"}

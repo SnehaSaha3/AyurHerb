@@ -8,7 +8,7 @@ import Profile from "./components/pages/Profile"
 import CropList from "./components/pages/CropList"
 import CropForm from "./components/forms/CropForm"
 import CropMap from "./components/maps/CropMap"
-
+import Home from "./components/pages/FarmerHome"
 function App() {
   return (
     <Routes>
@@ -20,6 +20,7 @@ function App() {
 
       {/* Nested farmer dashboard */}
       <Route path="/farmer-dashboard" element={<FarmerDashboard />}>
+        <Route index element={<Home />} />
         <Route path="crops" element={<CropList />} />       {/* Crop data */}
         <Route path="crops/add" element={<CropForm />} />   {/* Add crop */}
         <Route path="geotagged" element={ <CropMap />}/>

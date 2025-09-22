@@ -12,7 +12,7 @@ export interface CropData {
 }
 
 export const registerCrop = async (data: CropData) => {
-  return API.post("/add", data)  // ✅ fixed
+  return API.post("/add", data)  
 }
 
 
