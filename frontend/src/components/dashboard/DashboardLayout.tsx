@@ -13,7 +13,7 @@ export default function DashboardLayout({
   userType,
   links,
   children,
-  farmerName,
+  // farmerName,
 }: DashboardProps) {
   const iconMap: Record<string, JSX.Element> = {
     Home: <HomeIcon className="w-5 h-5 mr-2 text-blue-500" />,
@@ -29,9 +29,9 @@ export default function DashboardLayout({
         <h2 className="text-xl font-bold mb-2 capitalize">
           {userType} Dashboard
         </h2>
-        {farmerName && (
+        {/* {farmerName && (
           <p className="text-gray-700 font-medium">👨‍🌾 {farmerName}</p>
-        )}
+        )} */}
 
         <ul className="space-y-3 mt-4">
           {links.map((link) => (

@@ -13,6 +13,9 @@ from typing import Union, Optional, Dict
 _geolocator = Nominatim(user_agent="krishi_ai", timeout=10)
 
 def reverse_geocode_if_needed(loc: Union[str, dict, None]) -> Optional[str]:
+    """
+    Return precise farming-relevant location: village/hamlet > town/district > state.
+    """
     if not loc:
         return None
 
@@ -24,47 +27,57 @@ def reverse_geocode_if_needed(loc: Union[str, dict, None]) -> Optional[str]:
         lng = loc.get("lng")
         if lat is not None and lng is not None:
             try:
-                result = _geolocator.reverse((lat, lng), language="en", exactly_one=True)
+                result = _geolocator.reverse(
+                    (lat, lng),
+                    language="en",
+                    exactly_one=True,
+                    addressdetails=True
+                )
                 if result and result.raw.get("address"):
                     comp = result.raw["address"]
-                    parts = [
+                    # Prioritize village-scale precision
+                    parts_priority = [
                         comp.get("hamlet"),
                         comp.get("village"),
+                        comp.get("locality"),
                         comp.get("suburb"),
                         comp.get("town"),
-                        comp.get("city"),
                         comp.get("county"),
                         comp.get("state_district"),
-                        comp.get("state")
+                        comp.get("state"),
                     ]
-                    parts = [p for p in parts if p]
+                    parts = [p for p in parts_priority if p]
                     if parts:
-                        return ", ".join(parts)
+                        farm_area = parts[0]
+                        nearby = parts[1] if len(parts) > 1 else ""
+                        return f"{farm_area}{', ' + nearby if nearby else ''}"
                     return result.address
             except Exception as e:
                 print(f"[reverse_geocode] error for {lat},{lng}: {e}")
-            # fallback
-            return f"{lat:.2f}, {lng:.2f} (Assam)"
-
+            return f"{lat:.2f}, {lng:.2f} (nearby farm area in Assam)"
     return None
 
 # ---------------------------------------------------------------------
-# Prompt builder
+# Prompt builder (concise bullet points)
 # ---------------------------------------------------------------------
-
 def build_prompt(question: str, context_text: str = "", intent: str = "general") -> str:
-    task = "Answer the farmer's question clearly in 2-3 lines."
+    """
+    Builds a prompt that forces concise, 2-3 line, personalised answers.
+    """
+    task = (
+        "Answer in 2-3 lines only. Focus entirely on the specific farm location "
+        "and its conditions (weather, rainfall, humidity, soil, irrigation). "
+        "Provide practical advice and avoid generic statements."
+    )
     if intent == "fertiliser":
-        task += " Suggest an appropriate fertiliser with dosage/timing if relevant."
+        task += " Include type, dosage, and timing if relevant."
 
     return f"""
 You are Krishi-AI, a trusted agricultural advisor.
 
-If reliable context is provided below, use it.
-If no context is given, rely on your agronomic knowledge plus the location/weather/soil info.
-Always give a clear practical tip — never just say 'consult an officer'.
+**IMPORTANT:** Give concise, personalised answers in 2-3 lines. Do not use bullets.
 
-Context:
+Context (farm details):
 {context_text or "—"}
 
 Question:
@@ -73,11 +86,19 @@ Question:
 {task}
 """
 
+
+
+
+
 # ---------------------------------------------------------------------
 # Retrieval + generation
 # ---------------------------------------------------------------------
 
 def query_rag(question: str, top_k: int = 5, context: Optional[Dict] = None) -> str:
+    """
+    Retrieves relevant documents, adds location/weather/soil context, and generates a concise answer.
+    """
+    # 1. RAG retrieval
     q_embed = embed_text(question)
     results = collection.query(
         query_embeddings=[q_embed],
@@ -91,14 +112,15 @@ def query_rag(question: str, top_k: int = 5, context: Optional[Dict] = None) -> 
     context_docs = [d for d, s in zip(docs, scores) if s <= threshold]
     context_text = "\n".join(context_docs) if context_docs else ""
 
-    # Attach farm info
+    # 2. Attach farm/location info
     if context:
         loc_name = reverse_geocode_if_needed(context.get("location"))
         weather = context.get("weather")
         soil = context.get("soil")
         irrigation = context.get("irrigation")
+
         if loc_name:
-            context_text += f"\nFarm Location: {loc_name}"
+            context_text += f"\nFarm Location: {loc_name} (specific farming region)"
         if weather:
             context_text += f"\nWeather: {weather}"
         if soil:
@@ -106,10 +128,15 @@ def query_rag(question: str, top_k: int = 5, context: Optional[Dict] = None) -> 
         if irrigation:
             context_text += f"\nIrrigation: {irrigation}"
 
-    intent = "fertiliser" if any(k in question.lower() for k in ["fertiliser", "fertilizer", "urea", "dap", "npk"]) else "general"
+    # 3. Determine intent
+    intent = "fertiliser" if any(
+        k in question.lower() for k in ["fertiliser", "fertilizer", "urea", "dap", "npk"]
+    ) else "general"
 
+    # 4. Build concise prompt
     prompt = build_prompt(question, context_text, intent)
 
+    # 5. Generate answer
     if not GEMINI_AVAILABLE:
         return context_text or "Gemini not available."
 
@@ -118,85 +145,26 @@ def query_rag(question: str, top_k: int = 5, context: Optional[Dict] = None) -> 
     return getattr(resp, "text", None) or "Gemini returned no answer."
 
 # ---------------------------------------------------------------------
-# Crop ranking
+# Crop recommendation (dynamic, location-specific)
 # ---------------------------------------------------------------------
 
-def rank_crops(location, top_k: int = 5):
+def recommend_crop(location: Union[str, dict], satellite_data: Optional[dict] = None) -> str:
+    """
+    Returns a concise, 2-3 line, personalised crop recommendation based on location and conditions.
+    """
     loc_name = reverse_geocode_if_needed(location) or "your region"
-    q_embed = embed_text(f"Crops grown in {loc_name}")
-    results = collection.query(query_embeddings=[q_embed], n_results=50)
-    docs = results.get("documents", [[]])[0]
-    if not docs:
-        return None, "No historical data found."
-
-    pairs = []
-    for doc in docs:
-        match = re.search(r"Yield[: ]\s*([0-9.]+)", doc)
-        val = float(match.group(1)) if match else None
-        if val is None:
-            nums = re.findall(r"([0-9.]+)", doc)
-            if nums:
-                val = float(nums[-1])
-        if val is None:
-            continue
-        crop_match = re.search(r"crop\s+([A-Za-z ]+)", doc, re.I)
-        crop = crop_match.group(1).strip() if crop_match else "Unknown"
-        pairs.append((crop, val))
-
-    if not pairs:
-        return None, "Could not extract yield data."
-
-    df = pd.DataFrame(pairs, columns=["Crop", "Yield"])
-    avg = df.groupby("Crop")["Yield"].mean().sort_values(ascending=False)
-    return avg.head(top_k), None
-
-# ---------------------------------------------------------------------
-# Crop recommendation
-# ---------------------------------------------------------------------
-
-def recommend_crop(location, satellite_data: Optional[dict] = None, top_k: int = 5) -> str:
-    loc_name = reverse_geocode_if_needed(location) or "your region"
-    crops, err = rank_crops(location, top_k)
-
     sat_summary = ", ".join(f"{k}: {v}" for k, v in (satellite_data or {}).items())
-
-    if err:
-        # If no retrieval data, still provide a fallback actionable answer
-        if GEMINI_AVAILABLE:
-            prompt = build_prompt(
-                f"Which variety of rice should farmers in {loc_name} sow?",
-                f"Weather/Satellite/Soil info: {sat_summary}"
-            )
-            resp = genai.GenerativeModel("gemini-1.5-flash").generate_content(prompt)
-            return getattr(resp, "text", None) or (
-                f"Based on {sat_summary or 'the climate'} in {loc_name}, "
-                "short-duration flood-tolerant rice such as Swarna Sub1 or Ranjit Sub1 is recommended. "
-                "Plant in raised beds or bunds to prevent waterlogging. "
-                "Use 120 kg N/ha split in 3 doses and maintain 20–25 cm spacing."
-            )
-
-        return (
-            f"Based on {sat_summary or 'the climate'} in {loc_name}, "
-            "short-duration flood-tolerant rice such as Swarna Sub1 or Ranjit Sub1 is recommended. "
-            "Plant in raised beds or bunds to prevent waterlogging. "
-            "Use 120 kg N/ha split in 3 doses and maintain 20–25 cm spacing."
-        )
-
-    # Retrieval succeeded
-    ctx = f"Historical yields:\n{crops.to_string()}"
+    context_text = f"Farm Location: {loc_name}"
     if sat_summary:
-        ctx += f"\nSatellite: {sat_summary}"
-
-    if not GEMINI_AVAILABLE:
-        return f"Top crops in {loc_name} (avg yield):\n{crops.to_string()}"
+        context_text += f"\nWeather/Soil/Irrigation: {sat_summary}"
 
     prompt = build_prompt(
-        f"Which 2-3 crops should farmers in {loc_name} grow and why?",
-        ctx
+        f"Which crops should farmers in {loc_name} grow and how? Include local varieties, intercropping, and practical tips.",
+        context_text
     )
+
+    if not GEMINI_AVAILABLE:
+        return f"Based on {loc_name} and its conditions ({sat_summary}), select crops suitable for local climate and soil."
+
     resp = genai.GenerativeModel("gemini-1.5-flash").generate_content(prompt)
-    return getattr(resp, "text", None) or (
-        f"Based on your location ({loc_name}) and conditions ({sat_summary}), "
-        "short-duration flood-tolerant rice such as Swarna Sub1 or Ranjit Sub1 is recommended. "
-        "Maintain proper spacing and fertiliser as per soil type."
-    )
+    return getattr(resp, "text", None) or f"Based on {loc_name} and its conditions ({sat_summary}), select crops suitable for local climate and soil."

@@ -23,7 +23,9 @@ export default function Weather({ lat, lng, setWeatherData }: WeatherProps) {
     const fetchWeather = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`http://localhost:5000/api/weather?lat=${lat}&lon=${lng}`);
+        const res = await axios.get(
+          `http://localhost:5000/api/weather?lat=${lat}&lon=${lng}`
+        );
         setWeather(res.data);
         if (setWeatherData) setWeatherData(res.data);
       } catch (err) {
@@ -39,13 +41,28 @@ export default function Weather({ lat, lng, setWeatherData }: WeatherProps) {
   if (loading) return <p>Loading weather...</p>;
   if (!weather) return <p>Weather data not available</p>;
 
+  // Map conditions to emojis
+  const getWeatherEmoji = (desc: string) => {
+    const lower = desc.toLowerCase();
+    if (lower.includes("rain")) return "🌧️";
+    if (lower.includes("cloud")) return "☁️";
+    if (lower.includes("mist") || lower.includes("fog")) return "🌫️";
+    if (lower.includes("sun") || lower.includes("clear")) return "☀️";
+    if (lower.includes("storm") || lower.includes("thunder")) return "⛈️";
+    return "🌤️"; // fallback
+  };
+
   return (
     <div className="bg-blue-50 p-4 rounded-lg shadow space-y-2">
-      <h2 className="text-xl font-semibold">🌤 Weather & Alerts</h2>
-      <p className="text-lg font-bold">{weather.temp}°C</p>
-      <p className="capitalize">{weather.description}</p>
-      <p>Humidity: {weather.humidity}%</p>
-      <p>Wind: {weather.windSpeed} m/s</p>
+      <h2 className="text-xl font-semibold">🌦️ Weather & Alerts</h2>
+      <p className="text-lg font-bold">
+        {getWeatherEmoji(weather.description)} {weather.temp}°C
+      </p>
+      <p className="capitalize">
+        {getWeatherEmoji(weather.description)} {weather.description}
+      </p>
+      <p>💧 Humidity: {weather.humidity}%</p>
+      <p>💨 Wind: {weather.windSpeed} m/s</p>
       {weather.rainChance && weather.rainChance > 50 && (
         <p className="text-red-600 font-bold">⚠️ Rain expected soon!</p>
       )}

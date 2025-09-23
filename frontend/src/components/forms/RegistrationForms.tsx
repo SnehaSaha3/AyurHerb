@@ -1,9 +1,24 @@
-import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+interface Farmer {
+  name: string;
+  contact: string;
+  email: string;
+  address: string;
+  herb: string;
+}
+
+interface Company {
+  name: string;
+  contact: string;
+  email: string;
+  address: string;
+}
 
 interface RegistrationFormProps {
-  role: "farmer" | "company"
-  cropOptions?: string[]
+  role: "farmer" | "company";
+  cropOptions?: string[];
 }
 
 export default function RegistrationForms({ role, cropOptions }: RegistrationFormProps) {
@@ -17,7 +32,7 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
 
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [registeredData, setRegisteredData] = useState<any>(null);
+  const [registeredData, setRegisteredData] = useState<Farmer | Company | null>(null);
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -52,16 +67,19 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
 
       setMessage("✅ Registration successful!");
       setRegisteredData(data[role]);
-      setFormData({ name: "", contact: "", email:"", address: "", herb: "" });
+      setFormData({ name: "", contact: "", email: "", address: "", herb: "" });
 
       setTimeout(() => navigate(`/${role}-dashboard`), 1500);
-    } catch (err: any) {
-      setMessage("❌ " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+    } catch (err: unknown) {
+  if (err instanceof Error) {
+    setMessage("❌ " + err.message);
+  } else {
+    setMessage("❌ An unknown error occurred");
+  }
+} finally {
+  setLoading(false);
+}
+  }
   return (
     <div className="p-6 max-w-md mx-auto bg-white shadow-md rounded">
       <h2 className="text-xl font-bold mb-4">
@@ -146,9 +164,9 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
           <p><strong>Contact:</strong> {registeredData.contact}</p>
           <p><strong>Email:</strong> {registeredData.email}</p>
           <p><strong>Address:</strong> {registeredData.address}</p>
-          {role === "farmer" && <p><strong>Herb:</strong> {registeredData.herb}</p>}
+          {role === "farmer" && "herb" in registeredData && <p><strong>Herb:</strong> {registeredData.herb}</p>}
         </div>
       )}
     </div>
-  )
+  );
 }
