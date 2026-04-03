@@ -1,46 +1,68 @@
-import { HiHome, HiSearch, HiInformationCircle } from "react-icons/hi"
-import { IoMdPerson } from "react-icons/io"
-import { Link } from 'react-router-dom'
-import NavItem from './NavItem'
-import logo from '../assets/logo.png'
+import { Link, useLocation } from "react-router-dom";
+import logo from "../assets/logo.png";
 
 function Navbar() {
+  const location = useLocation();
+
   const menu = [
-    {
-      name: "Home",
-      icon: HiHome,
-      path: "/"
-    },
-    {
-      name: "About",
-      icon: HiInformationCircle,
-      path: "/about"
-    },
-    {
-      name: "Registration/Login",
-      icon: IoMdPerson,
-      path: "/registration"
-    },
-    {
-      name: "Search",
-      icon: HiSearch,
-      path: "/search"
-    },
+    { name: "Home", path: "/" },
+    { name: "About", path: "/about" },
+    { name: "Search", path: "/search" },
   ];
 
   return (
-     <div className="flex items-center justify-between w-full px-4 py-2 bg-white shadow">
-      <Link to="/">
-        <img src={logo} className="w-[80px] md:w-[115px] object-cover" alt="Logo" />
-      </Link>
-      <div className="flex gap-7">
-        {menu.map((item) => (
-          <Link key={item.name} to={item.path}>
-            <NavItem name={item.name} Icon={item.icon} />
-          </Link>
-        ))}
+    <nav className="w-full sticky top-0 z-50 backdrop-blur-lg bg-white/70 border-b border-green-100">
+      
+      {/* ⬇️ Reduced width + padding */}
+      <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+
+        {/* LOGO */}
+        <Link to="/" className="flex items-center">
+          <img
+            src={logo}
+            className="w-[85px] object-contain"
+            alt="logo"
+          />
+        </Link>
+
+        {/* MENU */}
+        <div className="hidden md:flex items-center gap-6">
+          {menu.map((item) => {
+            const isActive = location.pathname === item.path;
+
+            return (
+              <Link
+                key={item.name}
+                to={item.path}
+                className="relative text-[14px] font-medium text-gray-700 transition"
+              >
+                <span
+                  className={`${
+                    isActive
+                      ? "text-green-700"
+                      : "hover:text-green-600"
+                  }`}
+                >
+                  {item.name}
+                </span>
+
+                {isActive && (
+                  <span className="absolute left-0 -bottom-1 w-full h-[2px] bg-green-600 rounded-full"></span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* CTA */}
+        <Link
+          to="/registration"
+          className="px-4 py-1.5 text-sm font-medium text-green-700 border border-green-600 rounded-full hover:bg-green-600 hover:text-white transition"
+        >
+          Login
+        </Link>
       </div>
-    </div>
+    </nav>
   );
 }
 
