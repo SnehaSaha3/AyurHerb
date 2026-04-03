@@ -10,7 +10,7 @@ export default function AddCrop() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await axios.post("http://localhost:5000/api/crops/add", {
+      const res = await axios.post("http://localhost:8000/api/crops/add", {
        
         herb,
         

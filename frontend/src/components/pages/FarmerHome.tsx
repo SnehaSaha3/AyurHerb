@@ -25,7 +25,7 @@ export default function FarmerHome() {
       const token = localStorage.getItem("token");
       if (!token) return;
 
-      const res = await axios.get("http://localhost:5000/api/crops/mine", {
+      const res = await axios.get("http://localhost:8000/api/crops/mine", {
         headers: { Authorization: `Bearer ${token}` },
       });
 

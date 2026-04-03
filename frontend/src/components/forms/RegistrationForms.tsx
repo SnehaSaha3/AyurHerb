@@ -46,8 +46,8 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
     try {
       const url =
         role === "farmer"
-          ? "http://localhost:5000/api/farmers/register"
-          : "http://localhost:5000/api/companies/register";
+          ? "http://localhost:8000/api/farmers/register"
+          : "http://localhost:8000/api/companies/register";
 
       const res = await fetch(url, {
         method: "POST",

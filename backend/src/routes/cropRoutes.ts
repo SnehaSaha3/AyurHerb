@@ -63,6 +63,8 @@ router.post("/add", authMiddleware, async (req: any, res: Response) => {
 router.get("/mine", authMiddleware, async (req: any, res: Response) => {
   try {
     const farmer = await Farmer.findById(req.user.farmerId);
+      console.log("farmer:", farmer);           // ← add this
+    console.log("farmerId:", farmer?.farmerId);
     if (!farmer)
       return res.status(404).json({ success: false, error: "Farmer not found" });
 

@@ -35,7 +35,7 @@ export default function CropList() {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("No token found.");
 
-      const res = await axios.get("http://localhost:5000/api/crops/mine", {
+      const res = await axios.get("http://localhost:8000/api/crops/mine", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -72,7 +72,7 @@ const addCrop = async () => {
     if (!token) throw new Error("No token found.");
 
     const res = await axios.post(
-      "http://localhost:5000/api/crops/add",
+      "http://localhost:8000/api/crops/add",
       {
         cropName: newCropName,
         soilType: newSoilType,

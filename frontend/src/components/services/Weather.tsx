@@ -24,7 +24,7 @@ export default function Weather({ lat, lng, setWeatherData }: WeatherProps) {
       try {
         setLoading(true);
         const res = await axios.get(
-          `http://localhost:5000/api/weather?lat=${lat}&lon=${lng}`
+          `http://localhost:8000/api/weather?lat=${lat}&lon=${lng}`
         );
         setWeather(res.data);
         if (setWeatherData) setWeatherData(res.data);
