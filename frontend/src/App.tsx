@@ -9,11 +9,13 @@ import CropList from "./components/pages/CropList"
 import CropForm from "./components/forms/CropForm"
 import CropMap from "./components/maps/CropMap"
 import Home from "./components/pages/FarmerHome"
+import About from "./components/pages/About"
 function App() {
   return (
     <Routes>
       <Route path="/" element={<NavPages />}>
         <Route index element={<Homee />} />
+        <Route path="about" element={<About />} />
         <Route path="registration" element={<RegistrationPage />} />
         <Route path="farmer-registration" element={<FarmerForm />} />
       </Route>

@@ -19,34 +19,41 @@ function MapComponent() {
     }
   }, []);
 
+  // 🌿 Loading Skeleton
   if (!coords) {
     return (
-      <div className="h-[320px] flex items-center justify-center bg-gray-100">
-        <div className="animate-pulse text-gray-500">
-          Loading map...
+      <div className="h-[320px] rounded-2xl bg-gradient-to-br from-green-50 to-gray-100 flex items-center justify-center">
+        <div className="animate-pulse text-green-700 text-sm">
+          Fetching live location...
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full h-[320px] relative">
+    <div className="w-full h-[320px] relative rounded-2xl overflow-hidden">
+
+      {/* 🌿 Soft overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none z-10"></div>
+
       <Map
-        height={320}
-        center={coords}
-        zoom={6}
-        defaultZoom={5}
-      >
-        <ZoomControl />
+  height={320}
+  defaultCenter={coords}
+  defaultZoom={6}
+>
+  <ZoomControl />
+  <Marker width={40} anchor={coords} />
+     </Map>
+      
 
-        {/* Marker */}
-        <Marker width={40} anchor={coords} />
+      {/* 📍 Label */}
+      <div className="absolute bottom-4 left-4 bg-white/80 backdrop-blur-md px-3 py-1.5 text-xs rounded-full shadow-md border border-white/50 z-20">
+        📍 Your Live Location
+      </div>
 
-      </Map>
-
-      {/* Overlay label */}
-      <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur px-3 py-1 text-xs rounded-full shadow">
-        📍 Your Location
+      {/* 🌿 Top tag */}
+      <div className="absolute top-4 left-4 text-xs text-white bg-black/40 px-3 py-1 rounded-full backdrop-blur z-20">
+        Live Tracking
       </div>
     </div>
   );
