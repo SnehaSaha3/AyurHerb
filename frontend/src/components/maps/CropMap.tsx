@@ -31,7 +31,7 @@ export default function CropMap() {
   useEffect(() => {
     const fetchCrops = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/crops")
+        const res = await axios.get("http://localhost:8000/api/crops")
         if (Array.isArray(res.data.crops)) {
           const parsedCrops: Crop[] = []
 

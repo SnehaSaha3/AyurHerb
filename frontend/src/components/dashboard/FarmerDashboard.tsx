@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "./DashboardLayout";
 import axios from "axios";
 import { Outlet } from "react-router-dom";
-import FarmerGreeting from "../services/Greeting"
+import FarmerGreeting from "../services/Greeting";
 
 function FarmerDashboard() {
   const [farmerName, setFarmerName] = useState("");
@@ -17,7 +17,7 @@ function FarmerDashboard() {
         }
 
         const res = await axios.get(
-          "http://localhost:5000/api/farmers/farmer-dashboard",
+          "http://localhost:8000/api/farmers/farmer-dashboard",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -34,6 +34,7 @@ function FarmerDashboard() {
         console.error("Error fetching farmer:", err);
       }
     };
+
     fetchFarmer();
   }, []);
 
@@ -45,11 +46,13 @@ function FarmerDashboard() {
   ];
 
   return (
-    <DashboardLayout userType="Farmer" links={farmerLinks} farmerName={farmerName}>
-      {/* 👇 Greeting goes here */}
-      <FarmerGreeting name={farmerName} />
-
-      <Outlet />
+    <DashboardLayout
+      userType="Farmer"
+      links={farmerLinks}
+      farmerName={farmerName}
+    >
+      <FarmerGreeting />
+      <Outlet /> 
     </DashboardLayout>
   );
 }

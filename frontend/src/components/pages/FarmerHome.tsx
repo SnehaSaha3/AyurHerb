@@ -9,7 +9,6 @@ interface CropSummary {
   season?: string;
   stage?: string;
   moisture?: number;
-  source?: string;
   location?: { lat: number; lng: number };
 }
 
@@ -17,83 +16,124 @@ export default function FarmerHome() {
   const [crops, setCrops] = useState<CropSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [farmLocation, setFarmLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [weatherData, setWeatherData] = useState<WeatherData | undefined>(undefined);
+  const [weatherData, setWeatherData] = useState<WeatherData>();
 
   useEffect(() => {
-  const fetchCrops = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return;
+    const fetchCrops = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
 
-      const res = await axios.get("http://localhost:8000/api/crops/mine", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+        const res = await axios.get("http://localhost:8000/api/crops/mine", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-      const allCrops: CropSummary[] = Array.isArray(res.data.crops) ? res.data.crops : [];
-      setCrops(allCrops.slice(0, 3));
+        const allCrops = Array.isArray(res.data.crops) ? res.data.crops : [];
+        setCrops(allCrops.slice(0, 3));
 
-      if (allCrops[0]?.location) setFarmLocation(allCrops[0].location);
-    } catch {
-      console.error("Error fetching crops");
-    } finally {
-      setLoading(false);
-    }
-  };
-  fetchCrops();
-}, []);
+        if (allCrops[0]?.location) {
+          setFarmLocation(allCrops[0].location);
+        }
+      } catch {
+        console.error("Error fetching crops");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCrops();
+  }, []);
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold text-green-700">👩‍🌾 Welcome back, Farmer!</h1>
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-      {/* Responsive layout */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left panel: Crops & Weather */}
-        <div className="flex flex-col gap-6 lg:w-1/3">
-          {/* Crop cards */}
-          <div className="space-y-4">
-            {loading ? (
-              <p>Loading crops...</p>
-            ) : crops.length === 0 ? (
-              <p>No crops registered yet 🌱</p>
-            ) : (
-              crops.map((c) => (
+      {/* LEFT */}
+      <div className="lg:col-span-1 space-y-6">
+
+        {/* Crops */}
+        <div className="bg-white p-4 rounded-xl border shadow-sm">
+          <h2 className="text-xs text-gray-500 mb-3 uppercase tracking-wide">
+            Your Crops
+          </h2>
+
+          {loading ? (
+            <p className="text-sm text-gray-400">Loading...</p>
+          ) : crops.length === 0 ? (
+            <p className="text-sm text-gray-400">No crops yet</p>
+          ) : (
+            <div className="space-y-3">
+              {crops.map((c) => (
                 <div
                   key={c.cropId}
-                  className="p-4 rounded-xl shadow-md bg-gradient-to-r from-green-50 to-green-100 hover:scale-105 transition-transform"
+                  className="p-3 border rounded-lg hover:shadow-sm transition"
                 >
-                  <h3 className="font-semibold text-lg mb-1">🌾 {c.cropName}</h3>
-                  <p className="text-sm text-gray-700">🌿 Season: {c.season || "—"}</p>
-                  <p className="text-sm text-gray-700">🌱 Stage: {c.stage || "Sowing"}</p>
-                  <div className="mt-2">
-                    <span className="text-xs text-gray-500">💧 Moisture:</span>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                      <div
-                        className="bg-green-500 h-2 rounded-full"
-                        style={{ width: `${c.moisture ?? 0}%` }}
-                      />
-                    </div>
+                  <p className="text-sm font-medium text-gray-800">
+                    {c.cropName}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {c.season || "—"} • {c.stage || "Sowing"}
+                  </p>
+
+                  <div className="mt-2 h-1.5 bg-gray-200 rounded-full">
+                    <div
+                      className="h-1.5 bg-green-500 rounded-full"
+                      style={{ width: `${c.moisture ?? 0}%` }}
+                    />
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-          {/* Weather card */}
-          {farmLocation && (
+        {/* Weather */}
+        {farmLocation && (
+          <div className="bg-white p-4 rounded-xl border shadow-sm">
+            <h2 className="text-xs text-gray-500 mb-3 uppercase tracking-wide">
+              Weather
+            </h2>
+
             <WeatherCard
               lat={farmLocation.lat}
               lng={farmLocation.lng}
               setWeatherData={setWeatherData}
             />
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Right panel: Chatbot */}
-        <div className="lg:w-2/3">
-          <ChatbotCard farmLocation={farmLocation} weatherData={weatherData} />
+      </div>
+
+      {/* RIGHT - CHAT */}
+      <div className="lg:col-span-3 flex flex-col">
+
+        <div className="bg-white rounded-xl border shadow-sm flex flex-col h-full">
+
+          {/* Header */}
+          <div className="flex items-center gap-3 p-4 border-b">
+            <div className="w-8 h-8 bg-green-600 text-white flex items-center justify-center rounded-full text-sm font-bold">
+              A
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-800">
+                AyurMate
+              </p>
+              <p className="text-xs text-gray-500">
+                AI Assistant
+              </p>
+            </div>
+          </div>
+
+          {/* Chat */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <ChatbotCard
+              farmLocation={farmLocation}
+              weatherData={weatherData}
+            />
+          </div>
+
         </div>
       </div>
+
     </div>
   );
 }

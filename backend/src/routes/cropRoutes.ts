@@ -63,21 +63,42 @@ router.post("/add", authMiddleware, async (req: any, res: Response) => {
 router.get("/mine", authMiddleware, async (req: any, res: Response) => {
   try {
     const farmer = await Farmer.findById(req.user.farmerId);
-      console.log("farmer:", farmer);           // ← add this
+
+    console.log("farmer:", farmer);
     console.log("farmerId:", farmer?.farmerId);
-    if (!farmer)
-      return res.status(404).json({ success: false, error: "Farmer not found" });
 
-    const onChain = await getFarmerCropsFromChain(farmer.farmerId!);
-    const onChainFormatted = onChain.map((c) => ({
-      cropId: c.id?.toString() || "",
-      cropName: c.name || "🌱 Unknown",
-      soilType: c.soil || "-",
-      season: c.season || "-",
-      location: { lat: c.lat || 0, lng: c.lng || 0 },
-      source: "Blockchain",
-    }));
+    if (!farmer) {
+      return res.status(404).json({
+        success: false,
+        error: "Farmer not found",
+      });
+    }
 
+    // ✅ Always safe default
+    let onChainFormatted: any[] = [];
+
+    // ✅ Only call blockchain if farmerId exists
+    if (farmer.farmerId !== undefined && farmer.farmerId !== null) {
+      try {
+        const onChain = await getFarmerCropsFromChain(farmer.farmerId);
+
+        onChainFormatted = onChain.map((c) => ({
+          cropId: c.id?.toString() || "",
+          cropName: c.name || "🌱 Unknown",
+          soilType: c.soil || "-",
+          season: c.season || "-",
+          location: { lat: c.lat || 0, lng: c.lng || 0 },
+          source: "Blockchain",
+        }));
+      } catch (blockErr: any) {
+        console.error("Blockchain error:", blockErr.message);
+        // ❗ Do NOT crash API
+      }
+    } else {
+      console.warn("⚠️ farmerId missing → skipping blockchain");
+    }
+
+    // ✅ Mongo data (always works)
     const offChain =
       farmer.crops?.map((c) => ({
         cropId: c.cropId ?? "",
@@ -88,15 +109,20 @@ router.get("/mine", authMiddleware, async (req: any, res: Response) => {
         source: "MongoDB",
       })) || [];
 
-    res.json({ success: true, crops: [...onChainFormatted, ...offChain] });
+    return res.json({
+      success: true,
+      crops: [...onChainFormatted, ...offChain],
+    });
+
   } catch (err: any) {
     console.error("Error in GET /crops/mine:", err);
-    res
-      .status(500)
-      .json({ success: false, error: err.message || "Internal Server Error" });
+
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Internal Server Error",
+    });
   }
 });
-
 /* -------------------- GET CROPS BY FARMERID -------------------- */
 router.get("/:farmerId", async (req: Request, res: Response) => {
   try {

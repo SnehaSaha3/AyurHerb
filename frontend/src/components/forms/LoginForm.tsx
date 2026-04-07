@@ -27,8 +27,8 @@ export default function LoginForm({ role }: LoginFormProps) {
     try {
       const url =
         role === "farmer"
-          ? "http://localhost:5000/api/farmers/login"
-          : "http://localhost:5000/api/companies/login";
+          ? "http://localhost:8000/api/farmers/login"
+          : "http://localhost:8000/api/companies/login";
 
       const res = await fetch(url, {
         method: "POST",

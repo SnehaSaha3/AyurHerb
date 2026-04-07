@@ -1,26 +1,18 @@
 import { useEffect, useState } from "react";
 
-interface FarmerGreetingProps {
-  name: string;
-}
-
-export default function FarmerGreeting({ name }: FarmerGreetingProps) {
+export default function FarmerGreeting() {
   const [greeting, setGreeting] = useState("");
 
   useEffect(() => {
     const hour = new Date().getHours();
-    if (hour < 12) {
-      setGreeting("Good Morning");
-    } else if (hour < 18) {
-      setGreeting("Good Afternoon");
-    } else {
-      setGreeting("Good Evening");
-    }
+    if (hour < 12) setGreeting("Good Morning");
+    else if (hour < 18) setGreeting("Good Afternoon");
+    else setGreeting("Good Evening");
   }, []);
 
   return (
-    <h2 className="text-2xl font-bold text-green-700 flex items-center gap-2">
-      🌾 {greeting}, {name}!
-    </h2>
+    <h1 className="text-lg font-medium text-gray-700 mb-4">
+      {greeting} 👩‍🌾
+    </h1>
   );
 }
