@@ -13,6 +13,7 @@ import CropForm from "./components/forms/CropForm";
 import CropMap from "./components/maps/CropMap";
 import Home from "./components/pages/FarmerHome";
 import About from "./components/pages/About";
+import CompanyDashboard from "./components/dashboard/CompanyDashboard";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -32,6 +33,7 @@ function App() {
         <Route path="about" element={<About />} />
         <Route path="registration" element={<RegistrationPage />} />
         <Route path="farmer-registration" element={<FarmerForm />} />
+         <Route path="/company-dashboard" element={<CompanyDashboard />} />
       </Route>
 
       <Route path="/farmer-dashboard" element={<FarmerDashboard />}>
