@@ -15,11 +15,13 @@ interface Crop {
   source?: string
 }
 
-/** Component to dynamically update map center */
+/** Map Center Updater */
 function MapUpdater({ center }: { center: [number, number] }) {
   const map = useMap()
   useEffect(() => {
-    if (center[0] && center[1]) map.setView(center, map.getZoom())
+    if (center[0] && center[1]) {
+      map.setView(center, map.getZoom())
+    }
   }, [center, map])
   return null
 }
@@ -28,33 +30,44 @@ export default function CropMap() {
   const [crops, setCrops] = useState<Crop[]>([])
   const [selectedFarmer, setSelectedFarmer] = useState<{ id: string; name: string } | null>(null)
   const [mapCenter, setMapCenter] = useState<[number, number]>([26.2, 92.93])
+
   useEffect(() => {
     const fetchCrops = async () => {
       try {
         const res = await axios.get("http://localhost:8000/api/crops")
+
         if (Array.isArray(res.data.crops)) {
           const parsedCrops: Crop[] = []
 
           for (const crop of res.data.crops as Crop[]) {
-            if (crop && crop.location) {
-              parsedCrops.push({
-                ...crop,
-                location: {
-                  lat: Number(crop.location.lat),
-                  lng: Number(crop.location.lng),
-                },
-              })
+            if (!crop || !crop.location) continue
+
+            let lat = Number(crop.location.lat)
+            let lng = Number(crop.location.lng)
+
+            // 🧠 FIX: Handle blockchain scaled values
+            if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+              lat = lat / 1e6
+              lng = lng / 1e6
             }
+
+            // 🧠 FIX: Only skip truly invalid values
+            if (!lat || !lng) continue
+
+            parsedCrops.push({
+              ...crop,
+              location: { lat, lng },
+            })
           }
 
           setCrops(parsedCrops)
 
-          // Center map on first valid location
-          const firstValid = parsedCrops.find(
-            (c) => c.location && c.location.lat !== 0 && c.location.lng !== 0
-          )
-          if (firstValid?.location) {
-            setMapCenter([firstValid.location.lat, firstValid.location.lng])
+          // Center map on first valid crop
+          if (parsedCrops.length > 0) {
+            setMapCenter([
+              parsedCrops[0].location!.lat,
+              parsedCrops[0].location!.lng,
+            ])
           }
         } else {
           setCrops([])
@@ -66,81 +79,82 @@ export default function CropMap() {
     }
 
     fetchCrops()
+    
   }, [])
+  
 
   return (
     <div className="w-full h-[600px] md:h-[80vh] relative">
-      <MapContainer center={mapCenter} zoom={8} className="w-full h-full">
+      <MapContainer center={mapCenter} zoom={6} className="w-full h-full">
         <MapUpdater center={mapCenter} />
+
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
         {crops.map((crop, i) => {
-          // Generate a unique key using farmerId + cropId + index
-          const key = `${crop.farmerId ?? "unknown"}-${crop.cropId ?? "unknown"}-${i}`;
+          const key = `${crop.farmerId ?? "unknown"}-${crop.cropId ?? "unknown"}-${i}`
+
           return (
-            crop.location && (
-              <Marker
-                key={key}
-                position={[crop.location.lat, crop.location.lng]}
-              >
-                <Popup>
-                  <div className="w-72 p-4 bg-white rounded-xl shadow-lg border border-gray-200 space-y-2">
-                    <h3 className="text-lg font-bold">🌾 {crop.cropName}</h3>
+            <Marker
+              key={key}
+              position={[crop.location!.lat, crop.location!.lng]}
+            >
+              <Popup>
+                <div className="w-72 p-4 bg-white rounded-xl shadow-lg border space-y-2">
+                  <h3 className="text-lg font-bold">🌾 {crop.cropName}</h3>
+
+                  <p>🌞 <b>Season:</b> {crop.season || "-"}</p>
+                  <p>🪴 <b>Soil:</b> {crop.soilType || "-"}</p>
+
+                  <p className="text-xs text-gray-500">
+                    📍 {crop.location!.lat}, {crop.location!.lng}
+                  </p>
+
+                  {crop.farmerId && (
                     <div>
-                      🌞 <span className="font-semibold">Season:</span> {crop.season || "-"}
+                      👨‍🌾 <b>{crop.farmerName || "Unknown"}</b>
+
+                      <button
+                        onClick={() =>
+                          setSelectedFarmer({
+                            id: crop.farmerId!,
+                            name: crop.farmerName || "Unknown",
+                          })
+                        }
+                        className="ml-2 px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                      >
+                        View
+                      </button>
                     </div>
-                    <div>
-                      🪴 <span className="font-semibold">Soil:</span> {crop.soilType || "-"}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      📍 Lat: {crop.location.lat}, Lng: {crop.location.lng}
-                    </div>
-                    {crop.farmerId && (
-                      <div>
-                        👨‍🌾 <span className="font-semibold">Farmer:</span> {crop.farmerName}
-                        <button
-                          onClick={() =>
-                            setSelectedFarmer({
-                              id: crop.farmerId ?? "",
-                              name: crop.farmerName ?? "",
-                            })
-                          }
-                          className="ml-2 px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
-                        >
-                          View Farmer
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </Popup>
-              </Marker>
-            )
+                  )}
+                </div>
+              </Popup>
+            </Marker>
           )
         })}
       </MapContainer>
 
+      {/* Loading */}
       {crops.length === 0 && (
         <div className="absolute top-4 left-4 bg-white px-3 py-1 rounded shadow z-10">
           Loading crops...
         </div>
       )}
 
+      {/* Farmer Modal */}
       {selectedFarmer && (
-        <div className="absolute top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl shadow-xl w-11/12 md:w-96 space-y-4">
-            <h2 className="text-xl font-bold mb-2">👨‍🌾 Farmer Details</h2>
-            <p>
-              <span className="font-semibold">Farmer Name:</span> {selectedFarmer.name}
-            </p>
-            <p>
-              <span className="font-semibold">Farmer ID:</span> {selectedFarmer.id}
-            </p>
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl shadow-xl w-96 space-y-4">
+            <h2 className="text-xl font-bold">👨‍🌾 Farmer Details</h2>
+
+            <p><b>Name:</b> {selectedFarmer.name}</p>
+            <p><b>ID:</b> {selectedFarmer.id}</p>
+
             <button
               onClick={() => setSelectedFarmer(null)}
-              className="mt-4 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
+              className="bg-red-500 text-white px-4 py-2 rounded-lg"
             >
               Close
             </button>

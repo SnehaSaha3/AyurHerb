@@ -163,12 +163,23 @@ router.get("/:farmerId", async (req: Request, res: Response) => {
 /* -------------------- GET ALL CROPS -------------------- */
 router.get("/", async (_req: Request, res: Response) => {
   try {
-    const onChain = await getAllCropsFromChain();
-    const farmers = await Farmer.find();
+    const onChain = await getAllCropsFromChain()
+    const farmers = await Farmer.find()
 
-    const offChain: any[] = [];
+    /* ---------- CREATE WALLET MAP ---------- */
+    const farmerMap: Record<string, any> = {}
+
     farmers.forEach((f) => {
-      (f.crops ?? []).forEach((c) =>
+      if (f.walletAddress) {
+        farmerMap[f.walletAddress.toLowerCase()] = f
+      }
+    })
+
+    /* ---------- OFFCHAIN ---------- */
+    const offChain: any[] = []
+
+    farmers.forEach((f) => {
+      ;(f.crops ?? []).forEach((c) => {
         offChain.push({
           cropId: c.cropId ?? "",
           cropName: c.cropName ?? "🌱 Unknown",
@@ -179,28 +190,52 @@ router.get("/", async (_req: Request, res: Response) => {
           farmerName: f.name,
           farmerId: f.farmerId,
         })
-      );
-    });
+      })
+    })
 
-    const allCrops = [
-      ...onChain.map((c) => ({
+    /* ---------- ONCHAIN ---------- */
+    const onChainFormatted = onChain.map((c) => {
+      let lat = Number(c.lat)
+      let lng = Number(c.lng)
+
+      // ✅ FIX SCALE
+      if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        lat = lat / 1e6
+        lng = lng / 1e6
+      }
+
+      const farmer = farmerMap[c.farmer?.toLowerCase()]
+
+      return {
         cropId: c.id?.toString() || "",
         cropName: c.name || "🌱 Unknown",
         soilType: c.soil || "-",
         season: c.season || "-",
-        location: { lat: c.lat || 0, lng: c.lng || 0 },
+        location: { lat, lng },
         source: "Blockchain",
-      })),
-      ...offChain,
-    ];
 
-    res.json({ success: true, crops: allCrops });
+        // ✅ IMPORTANT FIX
+        farmerName: farmer?.name || "Unknown Farmer",
+        farmerId: farmer?.farmerId || c.farmer, // fallback to wallet
+      }
+    })
+
+    const allCrops = [...onChainFormatted, ...offChain]
+
+    console.log("TOTAL CROPS:", allCrops.length)
+
+    res.json({
+      success: true,
+      crops: allCrops,
+    })
   } catch (err: any) {
-    console.error("Error in GET /crops:", err);
-    res
-      .status(500)
-      .json({ success: false, error: err.message || "Internal Server Error" });
+    console.error("Error in GET /crops:", err)
+    res.status(500).json({
+      success: false,
+      error: err.message || "Internal Server Error",
+    })
   }
-});
+
+})
 
 export default router;
