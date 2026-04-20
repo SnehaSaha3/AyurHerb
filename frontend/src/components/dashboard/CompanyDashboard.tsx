@@ -8,7 +8,7 @@ import {
   MessageSquare,
   Bell,
   Search,
-} from "lucide-react";
+} from "lucide-react"
 
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 
