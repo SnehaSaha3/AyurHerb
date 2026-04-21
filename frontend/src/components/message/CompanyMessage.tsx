@@ -19,25 +19,46 @@ interface Farmer {
 
 export default function CompanyMessages() {
   const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const [filteredFarmers, setFilteredFarmers] = useState<Farmer[]>([]);
   const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [search, setSearch] = useState("");
 
-  const companyId = "company-1"; // replace later with real auth
+  const companyId = "company-1";
 
   /* ---------------- FETCH FARMERS ---------------- */
   useEffect(() => {
     const fetchFarmers = async () => {
       try {
         const res = await axios.get("http://localhost:8000/api/farmers");
-        setFarmers(res.data.farmers || []);
+
+        console.log("FARMERS:", res.data);
+
+        if (res.data.success) {
+          setFarmers(res.data.farmers);
+          setFilteredFarmers(res.data.farmers);
+        } else {
+          setFarmers([]);
+          setFilteredFarmers([]);
+        }
       } catch (err) {
         console.error("Error fetching farmers", err);
+        setFarmers([]);
+        setFilteredFarmers([]);
       }
     };
 
     fetchFarmers();
   }, []);
+
+  /* ---------------- SEARCH FILTER ---------------- */
+  useEffect(() => {
+    const filtered = farmers.filter((f) =>
+      f.name.toLowerCase().includes(search.toLowerCase())
+    );
+    setFilteredFarmers(filtered);
+  }, [search, farmers]);
 
   /* ---------------- FETCH CHAT ---------------- */
   useEffect(() => {
@@ -48,14 +69,22 @@ export default function CompanyMessages() {
         const res = await axios.get(
           `http://localhost:8000/api/messages/chat/${companyId}/${selectedFarmer.farmerId}`
         );
-        setMessages(res.data.messages || []);
+
+        console.log("CHAT:", res.data);
+
+        if (res.data.success) {
+          setMessages(res.data.messages);
+        } else {
+          setMessages([]);
+        }
       } catch (err) {
         console.error("Error fetching messages", err);
+        setMessages([]);
       }
     };
 
     fetchMessages();
-  }, [selectedFarmer])
+  }, [selectedFarmer]);
 
   /* ---------------- SEND MESSAGE ---------------- */
   const sendMessage = async () => {
@@ -81,7 +110,7 @@ export default function CompanyMessages() {
     } catch (err) {
       console.error("Send failed", err);
     }
-  }
+  };
 
   return (
     <div className="flex h-[calc(100vh-80px)] bg-white rounded-2xl overflow-hidden border shadow-sm">
@@ -94,6 +123,8 @@ export default function CompanyMessages() {
           <div className="flex items-center bg-white px-3 py-2 rounded-xl border focus-within:ring-2 focus-within:ring-green-500">
             <Search size={16} className="text-gray-400" />
             <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search farmers..."
               className="ml-2 text-sm outline-none w-full"
             />
@@ -102,7 +133,13 @@ export default function CompanyMessages() {
 
         {/* Farmers List */}
         <div className="flex-1 overflow-y-auto">
-          {farmers.map((f) => (
+          {filteredFarmers.length === 0 && (
+            <p className="text-center text-gray-400 text-sm mt-4">
+              No farmers found
+            </p>
+          )}
+
+          {filteredFarmers.map((f) => (
             <div
               key={f.farmerId}
               onClick={() => setSelectedFarmer(f)}
@@ -125,19 +162,30 @@ export default function CompanyMessages() {
       <div className="flex-1 flex flex-col">
 
         {/* Header */}
-        <div className="p-4 border-b flex justify-between items-center">
-          <div>
-            <p className="font-semibold">
-              {selectedFarmer?.name || "Select a farmer"}
-            </p>
-            <p className="text-xs text-gray-500">
-              {selectedFarmer?.address}
-            </p>
-          </div>
+        <div className="p-4 border-b">
+          <p className="font-semibold">
+            {selectedFarmer?.name || "Select a farmer"}
+          </p>
+          <p className="text-xs text-gray-500">
+            {selectedFarmer?.address || ""}
+          </p>
         </div>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+
+          {!selectedFarmer && (
+            <p className="text-center text-gray-400 mt-10">
+              Select a farmer to start chatting 👨‍🌾
+            </p>
+          )}
+
+          {selectedFarmer && messages.length === 0 && (
+            <p className="text-center text-gray-400 text-sm">
+              No messages yet. Start conversation 👋
+            </p>
+          )}
+
           {messages.map((msg, i) => {
             const isMe = msg.senderId === companyId;
 
@@ -161,20 +209,23 @@ export default function CompanyMessages() {
         </div>
 
         {/* Input */}
-        <div className="p-3 border-t flex items-center gap-2 bg-white">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 border rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500"
-          />
-          <button
-            onClick={sendMessage}
-            className="bg-green-600 hover:bg-green-700 text-white p-3 rounded-xl transition"
-          >
-            <Send size={16} />
-          </button>
-        </div>
+        {selectedFarmer && (
+          <div className="p-3 border-t flex items-center gap-2 bg-white">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type a message..."
+              className="flex-1 border rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500"
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            />
+            <button
+              onClick={sendMessage}
+              className="bg-green-600 hover:bg-green-700 text-white p-3 rounded-xl transition"
+            >
+              <Send size={16} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ---------------- RIGHT PANEL ---------------- */}

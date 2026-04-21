@@ -95,4 +95,24 @@ router.get("/farmer-dashboard", authMiddleware, async (req: any, res: Response) 
   }
 });
 
+/* ---------------- GET ALL FARMERS ---------------- */
+router.get("/", async (_req: Request, res: Response) => {
+  try {
+    const farmers = await Farmer.find().select(
+      "farmerId name address herb walletAddress"
+    );
+
+    res.json({
+      success: true,
+      farmers,
+    });
+  } catch (err: any) {
+    console.error("Fetch farmers error:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message || "Server error",
+    });
+  }
+});
+
 export default router;
