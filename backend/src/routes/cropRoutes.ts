@@ -36,7 +36,7 @@ router.post("/add", authMiddleware, async (req: any, res: Response) => {
       lng,
     });
 
-    // Save to Mongo
+    
     farmer.crops = farmer.crops || [];
     farmer.crops.push(
       new Crop({
