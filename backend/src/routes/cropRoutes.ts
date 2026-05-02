@@ -163,23 +163,20 @@ router.get("/:farmerId", async (req: Request, res: Response) => {
 /* -------------------- GET ALL CROPS -------------------- */
 router.get("/", async (_req: Request, res: Response) => {
   try {
-    const onChain = await getAllCropsFromChain()
-    const farmers = await Farmer.find()
+    let onChain: any[] = [];
 
-    /* ---------- CREATE WALLET MAP ---------- */
-    const farmerMap: Record<string, any> = {}
+    try {
+      onChain = await getAllCropsFromChain();
+    } catch (err) {
+      console.warn("⚠️ Blockchain not running, using only MongoDB");
+    }
 
-    farmers.forEach((f) => {
-      if (f.walletAddress) {
-        farmerMap[f.walletAddress.toLowerCase()] = f
-      }
-    })
+    const farmers = await Farmer.find();
 
-    /* ---------- OFFCHAIN ---------- */
-    const offChain: any[] = []
+    const offChain: any[] = [];
 
     farmers.forEach((f) => {
-      ;(f.crops ?? []).forEach((c) => {
+      (f.crops ?? []).forEach((c) => {
         offChain.push({
           cropId: c.cropId ?? "",
           cropName: c.cropName ?? "🌱 Unknown",
@@ -188,54 +185,21 @@ router.get("/", async (_req: Request, res: Response) => {
           location: c.location ?? { lat: 0, lng: 0 },
           source: "MongoDB",
           farmerName: f.name,
-          farmerId: f.farmerId,
-        })
-      })
-    })
-
-    /* ---------- ONCHAIN ---------- */
-    const onChainFormatted = onChain.map((c) => {
-      let lat = Number(c.lat)
-      let lng = Number(c.lng)
-
-      // ✅ FIX SCALE
-      if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-        lat = lat / 1e6
-        lng = lng / 1e6
-      }
-
-      const farmer = farmerMap[c.farmer?.toLowerCase()]
-
-      return {
-        cropId: c.id?.toString() || "",
-        cropName: c.name || "🌱 Unknown",
-        soilType: c.soil || "-",
-        season: c.season || "-",
-        location: { lat, lng },
-        source: "Blockchain",
-
-        // ✅ IMPORTANT FIX
-        farmerName: farmer?.name || "Unknown Farmer",
-        farmerId: farmer?.farmerId || c.farmer, // fallback to wallet
-      }
-    })
-
-    const allCrops = [...onChainFormatted, ...offChain]
-
-    console.log("TOTAL CROPS:", allCrops.length)
+          farmerId: f._id,
+        });
+      });
+    });
 
     res.json({
       success: true,
-      crops: allCrops,
-    })
+      crops: [...onChain, ...offChain],
+    });
+
   } catch (err: any) {
-    console.error("Error in GET /crops:", err)
     res.status(500).json({
       success: false,
-      error: err.message || "Internal Server Error",
-    })
+      error: err.message,
+    });
   }
-
-})
-
+});
 export default router;
