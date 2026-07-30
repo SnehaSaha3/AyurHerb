@@ -8,8 +8,8 @@ contract CropRegistry {
         string area;
         string season;
         string soil;
-        int256 lat;       // <-- use int256, not string
-        int256 lng;       // <-- use int256, not string
+        int256 lat;
+        int256 lng;
         uint256 createdAt;
         uint256 updatedAt;
         address farmer;
@@ -22,14 +22,22 @@ contract CropRegistry {
     event CropAdded(uint256 indexed cropId, address indexed farmer, string name);
     event CropUpdated(uint256 indexed cropId, address indexed farmer, string name);
 
+    /// @notice Adds a crop attributed to `_farmerAddr`, not msg.sender.
+    /// @dev Since a single relayer wallet submits transactions on behalf of
+    ///      all farmers, the farmer's identity must be passed explicitly.
+    ///      Add access control (e.g. onlyRelayer / signature check) if this
+    ///      contract is public, so one farmer can't spoof another's address.
     function upsertCrop(
+        address _farmerAddr,
         string memory _name,
         string memory _area,
         string memory _season,
         string memory _soil,
-        int256 _lat,      // <-- add underscore here
-        int256 _lng       // <-- add underscore here
+        int256 _lat,
+        int256 _lng
     ) public returns (uint256 cropId, bool isNew) {
+        require(_farmerAddr != address(0), "Invalid farmer address");
+
         cropId = cropCount;
 
         crops[cropId] = Crop({
@@ -38,17 +46,17 @@ contract CropRegistry {
             area: _area,
             season: _season,
             soil: _soil,
-            lat: _lat,     // <-- now matches parameter
-            lng: _lng,     // <-- now matches parameter
+            lat: _lat,
+            lng: _lng,
             createdAt: block.timestamp,
             updatedAt: block.timestamp,
-            farmer: msg.sender
+            farmer: _farmerAddr
         });
 
-        farmerCrops[msg.sender].push(cropId);
+        farmerCrops[_farmerAddr].push(cropId);
         cropCount++;
 
-        emit CropAdded(cropId, msg.sender, _name);
+        emit CropAdded(cropId, _farmerAddr, _name);
         return (cropId, true);
     }
 

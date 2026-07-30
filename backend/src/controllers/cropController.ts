@@ -17,6 +17,7 @@ const cropRegistry = new ethers.Contract(
   wallet
 ) as ethers.Contract & {
   upsertCrop(
+    farmerAddr: string,
     name: string,
     area: string,
     season: string,
@@ -32,6 +33,7 @@ const cropRegistry = new ethers.Contract(
 // Create / Update crop on chain
 // -------------------------------------------------------------
 export async function upsertCropOnChain(payload: {
+  farmerAddr: string;
   name: string;
   area: string;
   season: string;
@@ -39,13 +41,16 @@ export async function upsertCropOnChain(payload: {
   lat: number | string;
   lng: number | string;
 }): Promise<{ txHash: string; cropId: number | null }> {
-  const { name, area, season, soil, lat, lng } = payload;
+  const { farmerAddr, name, area, season, soil, lat, lng } = payload;
 
   if (!ethers.isAddress(wallet.address)) {
     throw new Error("Invalid wallet derived from PRIVATE_KEY");
   }
   if (!process.env.CROP_REGISTRY_ADDRESS?.startsWith("0x")) {
     throw new Error("Invalid CROP_REGISTRY_ADDRESS in .env");
+  }
+  if (!ethers.isAddress(farmerAddr)) {
+    throw new Error(`Invalid farmer address: ${farmerAddr}`);
   }
 
   // --- parse & scale coordinates ---
@@ -61,6 +66,7 @@ export async function upsertCropOnChain(payload: {
   const scaledLng = BigInt(Math.round(parsedLng * 1e6));
 
   const tx = await cropRegistry.upsertCrop(
+    farmerAddr,
     name,
     area,
     season,
@@ -94,7 +100,7 @@ export async function upsertCropOnChain(payload: {
 // -------------------------------------------------------------
 // Read all crops from blockchain
 // -------------------------------------------------------------
-export async function getAllCropsFromChain(): Promise<
+export async function getAllCropsFromChain(): Promise <
   {
     id: number;
     name: string;

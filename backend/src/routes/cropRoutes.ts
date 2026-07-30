@@ -21,13 +21,21 @@ router.post("/add", authMiddleware, async (req: any, res: Response) => {
       });
     }
 
-    // Use farmerId from JWT
     const farmer = await Farmer.findById(req.user.farmerId);
     if (!farmer)
       return res.status(404).json({ success: false, error: "Farmer not found" });
 
-    // Save to blockchain
+    // farmer.walletAddress must be a real on-chain address for this farmer.
+    // See note below about the Farmer model.
+    if (!farmer.walletAddress) {
+      return res.status(400).json({
+        success: false,
+        error: "Farmer has no wallet address on file",
+      });
+    }
+
     const { txHash, cropId } = await upsertCropOnChain({
+      farmerAddr: farmer.walletAddress,
       name: cropName,
       area: "N/A",
       season: season || "",
@@ -36,7 +44,6 @@ router.post("/add", authMiddleware, async (req: any, res: Response) => {
       lng,
     });
 
-    
     farmer.crops = farmer.crops || [];
     farmer.crops.push(
       new Crop({
@@ -64,9 +71,6 @@ router.get("/mine", authMiddleware, async (req: any, res: Response) => {
   try {
     const farmer = await Farmer.findById(req.user.farmerId);
 
-    console.log("farmer:", farmer);
-    console.log("farmerId:", farmer?.farmerId);
-
     if (!farmer) {
       return res.status(404).json({
         success: false,
@@ -74,31 +78,29 @@ router.get("/mine", authMiddleware, async (req: any, res: Response) => {
       });
     }
 
-    // ✅ Always safe default
     let onChainFormatted: any[] = [];
 
-    // ✅ Only call blockchain if farmerId exists
-    if (farmer.farmerId !== undefined && farmer.farmerId !== null) {
+    if (farmer.walletAddress) {
       try {
-        const onChain = await getFarmerCropsFromChain(farmer.farmerId);
+        const onChain = await getFarmerCropsFromChain(farmer.walletAddress);
 
         onChainFormatted = onChain.map((c) => ({
           cropId: c.id?.toString() || "",
           cropName: c.name || "🌱 Unknown",
           soilType: c.soil || "-",
           season: c.season || "-",
-          location: { lat: c.lat || 0, lng: c.lng || 0 },
+          location: { lat: c.lat, lng: c.lng },
           source: "Blockchain",
+          farmerName: farmer.name,
+          farmerId: farmer._id,
         }));
       } catch (blockErr: any) {
         console.error("Blockchain error:", blockErr.message);
-        // ❗ Do NOT crash API
       }
     } else {
-      console.warn("⚠️ farmerId missing → skipping blockchain");
+      console.warn("⚠️ farmer has no walletAddress → skipping blockchain");
     }
 
-    // ✅ Mongo data (always works)
     const offChain =
       farmer.crops?.map((c) => ({
         cropId: c.cropId ?? "",
@@ -107,22 +109,23 @@ router.get("/mine", authMiddleware, async (req: any, res: Response) => {
         season: c.season ?? "-",
         location: c.location ?? { lat: 0, lng: 0 },
         source: "MongoDB",
+        farmerName: farmer.name,
+        farmerId: farmer._id,
       })) || [];
 
     return res.json({
       success: true,
       crops: [...onChainFormatted, ...offChain],
     });
-
   } catch (err: any) {
     console.error("Error in GET /crops/mine:", err);
-
     return res.status(500).json({
       success: false,
       error: err.message || "Internal Server Error",
     });
   }
 });
+
 /* -------------------- GET CROPS BY FARMERID -------------------- */
 router.get("/:farmerId", async (req: Request, res: Response) => {
   try {
@@ -131,15 +134,25 @@ router.get("/:farmerId", async (req: Request, res: Response) => {
     if (!farmer)
       return res.status(404).json({ success: false, error: "Farmer not found" });
 
-    const onChain = await getFarmerCropsFromChain(farmer.farmerId!);
-    const onChainFormatted = onChain.map((c) => ({
-      cropId: c.id?.toString() || "",
-      cropName: c.name || "🌱 Unknown",
-      soilType: c.soil || "-",
-      season: c.season || "-",
-      location: { lat: c.lat || 0, lng: c.lng || 0 },
-      source: "Blockchain",
-    }));
+    let onChainFormatted: any[] = [];
+
+    if (farmer.walletAddress) {
+      try {
+        const onChain = await getFarmerCropsFromChain(farmer.walletAddress);
+        onChainFormatted = onChain.map((c) => ({
+          cropId: c.id?.toString() || "",
+          cropName: c.name || "🌱 Unknown",
+          soilType: c.soil || "-",
+          season: c.season || "-",
+          location: { lat: c.lat, lng: c.lng },
+          source: "Blockchain",
+          farmerName: farmer.name,
+          farmerId: farmer._id,
+        }));
+      } catch (blockErr: any) {
+        console.error("Blockchain error:", blockErr.message);
+      }
+    }
 
     const offChain =
       farmer.crops?.map((c) => ({
@@ -149,6 +162,8 @@ router.get("/:farmerId", async (req: Request, res: Response) => {
         season: c.season ?? "-",
         location: c.location ?? { lat: 0, lng: 0 },
         source: "MongoDB",
+        farmerName: farmer.name,
+        farmerId: farmer._id,
       })) || [];
 
     res.json({ success: true, crops: [...onChainFormatted, ...offChain] });
@@ -159,6 +174,7 @@ router.get("/:farmerId", async (req: Request, res: Response) => {
       .json({ success: false, error: err.message || "Internal Server Error" });
   }
 });
+
 
 /* -------------------- GET ALL CROPS -------------------- */
 router.get("/", async (_req: Request, res: Response) => {
@@ -173,10 +189,39 @@ router.get("/", async (_req: Request, res: Response) => {
 
     const farmers = await Farmer.find();
 
-    const offChain: any[] = [];
+    const walletToFarmer = new Map<string, typeof farmers[number]>();
+    farmers.forEach((f) => {
+      if (f.walletAddress) {
+        walletToFarmer.set(f.walletAddress.toLowerCase(), f);
+      }
+    });
 
+    const onChainFormatted = onChain.map((c) => {
+      const matchedFarmer = walletToFarmer.get((c.farmer || "").toLowerCase());
+      return {
+        cropId: c.id?.toString() || "",
+        cropName: c.name || "🌱 Unknown",
+        soilType: c.soil || "-",
+        season: c.season || "-",
+        location: { lat: c.lat, lng: c.lng },
+        source: "Blockchain",
+        farmerName: matchedFarmer?.name || "Unknown",
+        farmerId: matchedFarmer?._id || c.farmer,
+      };
+    });
+
+    // Build a set of "farmerId:cropId" already represented on-chain,
+    // so the same crop isn't shown a second time from MongoDB.
+    const onChainKeys = new Set(
+      onChainFormatted.map((c) => `${c.farmerId}:${c.cropId}`)
+    );
+
+    const offChain: any[] = [];
     farmers.forEach((f) => {
       (f.crops ?? []).forEach((c) => {
+        const key = `${f._id}:${c.cropId ?? ""}`;
+        if (onChainKeys.has(key)) return; // already have this one from chain
+
         offChain.push({
           cropId: c.cropId ?? "",
           cropName: c.cropName ?? "🌱 Unknown",
@@ -192,9 +237,8 @@ router.get("/", async (_req: Request, res: Response) => {
 
     res.json({
       success: true,
-      crops: [...onChain, ...offChain],
+      crops: [...onChainFormatted, ...offChain],
     });
-
   } catch (err: any) {
     res.status(500).json({
       success: false,
@@ -202,4 +246,5 @@ router.get("/", async (_req: Request, res: Response) => {
     });
   }
 });
+
 export default router;

@@ -28,6 +28,7 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
     email: "",
     address: "",
     herb: "",
+    location:""
   });
 
   const [message, setMessage] = useState("");
@@ -67,7 +68,7 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
 
       setMessage("✅ Registration successful!");
       setRegisteredData(data[role]);
-      setFormData({ name: "", contact: "", email: "", address: "", herb: "" });
+      setFormData({ name: "", contact: "", email: "", address: "", herb: "", location:"" });
 
       setTimeout(() => navigate(`/${role}-dashboard`), 1500);
     } catch (err: unknown) {
