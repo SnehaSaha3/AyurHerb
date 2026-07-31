@@ -20,5 +20,9 @@
     "ts-node": "^10.9.2",
     "typechain": "^8.3.2",
     "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "react-router-dom": "^7.18.2",
+    "socket.io-client": "^4.8.3"
   }
 }

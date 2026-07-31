@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
 import MarkerClusterGroup from "react-leaflet-cluster"
 import L from "leaflet"
@@ -184,8 +185,8 @@ function MarkersLayer({
 }
 
 export default function CropMap() {
+  const navigate = useNavigate()
   const [crops, setCrops] = useState<Crop[]>([])
-  const [selectedFarmer, setSelectedFarmer] = useState<{ id: string; name: string } | null>(null)
   const [mapCenter, setMapCenter] = useState<[number, number]>([26.2, 92.93])
 
   useEffect(() => {
@@ -316,31 +317,13 @@ export default function CropMap() {
 
         <MarkersLayer
           crops={crops}
-          onViewFarmer={(id, name) => setSelectedFarmer({ id, name })}
+          onViewFarmer={(id) => navigate(`/company-dashboard/messages?farmerId=${id}`)}
         />
       </MapContainer>
 
       {crops.length === 0 && (
         <div className="absolute top-4 left-4 bg-white px-3 py-1 rounded shadow z-10">
           Loading crops...
-        </div>
-      )}
-
-      {selectedFarmer && (
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl shadow-xl w-96 space-y-4">
-            <h2 className="text-xl font-bold">👨‍🌾 Farmer Details</h2>
-
-            <p><b>Name:</b> {selectedFarmer.name}</p>
-            <p><b>ID:</b> {selectedFarmer.id}</p>
-
-            <button
-              onClick={() => setSelectedFarmer(null)}
-              className="bg-red-500 text-white px-4 py-2 rounded-lg"
-            >
-              Close
-            </button>
-          </div>
         </div>
       )}
     </div>

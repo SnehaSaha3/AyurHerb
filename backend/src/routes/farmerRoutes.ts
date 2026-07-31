@@ -75,14 +75,12 @@ router.get("/me", authMiddleware, async (req: any, res: Response) => {
   }
 });
 
-
-// 👉 NEW alias for dashboard
+// 👉 Dashboard alias
 router.get("/farmer-dashboard", authMiddleware, async (req: any, res: Response) => {
   try {
     const farmer = await Farmer.findById(req.user.farmerId);
     if (!farmer) return res.status(404).json({ error: "Farmer not found" });
 
-    // Send only what your dashboard needs
     res.json({
       id: farmer._id,
       name: farmer.name,
@@ -99,12 +97,24 @@ router.get("/farmer-dashboard", authMiddleware, async (req: any, res: Response) 
 router.get("/", async (_req: Request, res: Response) => {
   try {
     const farmers = await Farmer.find().select(
-      "farmerId name address herb walletAddress"
+      "name address herb walletAddress"
     );
+
+    // Key by Mongo _id, NOT a separate `farmerId` schema field — this
+    // must match what CropMap passes in the "View Farmer" redirect
+    // (?farmerId=<mongo _id>), or auto-selecting the farmer on the
+    // messages page silently fails to find a match.
+    const formatted = farmers.map((f) => ({
+      farmerId: f._id,
+      name: f.name,
+      address: f.address,
+      herb: f.herb,
+      walletAddress: f.walletAddress,
+    }));
 
     res.json({
       success: true,
-      farmers,
+      farmers: formatted,
     });
   } catch (err: any) {
     console.error("Fetch farmers error:", err);

@@ -6,6 +6,7 @@ import NavPages from "./components/pages/NavPage";
 import Homee from "./components/Home";
 import RegistrationPage from "./components/pages/Registration";
 import FarmerForm from "./components/forms/FarmerForm";
+import RegistrationForms from "./components/forms/RegistrationForms";
 import FarmerDashboard from "./components/dashboard/FarmerDashboard";
 import Profile from "./components/pages/Profile";
 import CropList from "./components/pages/CropList";
@@ -35,6 +36,7 @@ function App() {
         <Route path="about" element={<About />} />
         <Route path="registration" element={<RegistrationPage />} />
         <Route path="farmer-registration" element={<FarmerForm />} />
+        <Route path="company-registration" element={<RegistrationForms role="company" />} />
       </Route>
 
       <Route path="/farmer-dashboard" element={<FarmerDashboard />}>
@@ -48,7 +50,7 @@ function App() {
       <Route path="/company-dashboard" element={<CompanyDashboard />}>
         <Route index element={<CompanyHome />} />
         <Route path="messages" element={<CompanyMessages />} />
-     </Route>
+      </Route>
 
     </Routes>
   );

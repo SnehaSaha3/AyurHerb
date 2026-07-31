@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Send, Search } from "lucide-react";
 import axios from "axios";
+import { getSocket, decodeJwtPayload } from "../../lib/Socket.client"
 
 interface Message {
   senderId: string;
+  senderType: "farmer" | "company";
   receiverId: string;
+  receiverType: "farmer" | "company";
   text: string;
   createdAt: string;
 }
@@ -18,6 +22,9 @@ interface Farmer {
 }
 
 export default function CompanyMessages() {
+  const [searchParams] = useSearchParams();
+
+  const [companyId, setCompanyId] = useState<string | null>(null);
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [filteredFarmers, setFilteredFarmers] = useState<Farmer[]>([]);
   const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null);
@@ -25,15 +32,47 @@ export default function CompanyMessages() {
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
 
-  const companyId = "company-1";
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  /* ---------------- RESOLVE COMPANY IDENTITY + CONNECT SOCKET ---------------- */
+  useEffect(() => {
+    const token = localStorage.getItem("companyToken");
+    if (!token) return; // handled by the "not logged in" state below
+
+    const payload = decodeJwtPayload<{ companyId: string }>(token);
+    if (!payload?.companyId) return;
+
+    setCompanyId(payload.companyId);
+
+    const socket = getSocket(token);
+
+    socket.on("receive_message", (msg: Message) => {
+      setMessages((prev) => {
+        // safety net against accidental duplicate emits (e.g. reconnects)
+        if (
+          prev.some(
+            (m) =>
+              m.createdAt === msg.createdAt &&
+              m.senderId === msg.senderId &&
+              m.text === msg.text
+          )
+        ) {
+          return prev;
+        }
+        return [...prev, msg];
+      });
+    });
+
+    return () => {
+      socket.off("receive_message");
+    };
+  }, []);
 
   /* ---------------- FETCH FARMERS ---------------- */
   useEffect(() => {
     const fetchFarmers = async () => {
       try {
         const res = await axios.get("http://localhost:8000/api/farmers");
-
-        console.log("FARMERS:", res.data);
 
         if (res.data.success) {
           setFarmers(res.data.farmers);
@@ -52,6 +91,15 @@ export default function CompanyMessages() {
     fetchFarmers();
   }, []);
 
+  /* ---------------- AUTO-SELECT FARMER FROM "View Farmer" REDIRECT ---------------- */
+  useEffect(() => {
+    const farmerIdFromUrl = searchParams.get("farmerId");
+    if (!farmerIdFromUrl || farmers.length === 0) return;
+
+    const match = farmers.find((f) => f.farmerId === farmerIdFromUrl);
+    if (match) setSelectedFarmer(match);
+  }, [searchParams, farmers]);
+
   /* ---------------- SEARCH FILTER ---------------- */
   useEffect(() => {
     const filtered = farmers.filter((f) =>
@@ -60,17 +108,15 @@ export default function CompanyMessages() {
     setFilteredFarmers(filtered);
   }, [search, farmers]);
 
-  /* ---------------- FETCH CHAT ---------------- */
+  /* ---------------- FETCH CHAT HISTORY (sockets handle new messages live) ---------------- */
   useEffect(() => {
-    if (!selectedFarmer) return;
+    if (!selectedFarmer || !companyId) return;
 
     const fetchMessages = async () => {
       try {
         const res = await axios.get(
           `http://localhost:8000/api/messages/chat/${companyId}/${selectedFarmer.farmerId}`
         );
-
-        console.log("CHAT:", res.data);
 
         if (res.data.success) {
           setMessages(res.data.messages);
@@ -84,41 +130,59 @@ export default function CompanyMessages() {
     };
 
     fetchMessages();
-  }, [selectedFarmer]);
+  }, [selectedFarmer, companyId]);
 
-  /* ---------------- SEND MESSAGE ---------------- */
-  const sendMessage = async () => {
-    if (!input.trim() || !selectedFarmer) return;
+  /* ---------------- AUTO-SCROLL TO LATEST MESSAGE ---------------- */
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-    const newMsg = {
-      senderId: companyId,
-      senderType: "company",
-      receiverId: selectedFarmer.farmerId,
-      receiverType: "farmer",
-      text: input,
-    };
+  /* ---------------- SEND MESSAGE (real-time via socket) ---------------- */
+  const sendMessage = () => {
+    if (!input.trim() || !selectedFarmer || !companyId) return;
 
-    try {
-      await axios.post("http://localhost:8000/api/messages/send", newMsg);
+    const token = localStorage.getItem("companyToken");
+    if (!token) return;
 
-      setMessages((prev) => [
-        ...prev,
-        { ...newMsg, createdAt: new Date().toISOString() },
-      ]);
+    const socket = getSocket(token);
+    const text = input.trim();
 
-      setInput("");
-    } catch (err) {
-      console.error("Send failed", err);
-    }
+    setInput("");
+
+    socket.emit(
+      "send_message",
+      {
+        receiverId: selectedFarmer.farmerId,
+        receiverType: "farmer",
+        text,
+      },
+      (ack: { success: boolean; error?: string }) => {
+        if (!ack?.success) {
+          console.error("Message failed to send:", ack?.error);
+          // give the text back so the user can retry
+          setInput(text);
+        }
+      }
+    );
   };
 
-return (
+  /* ---------------- NOT LOGGED IN ---------------- */
+  if (!companyId) {
+    return (
+      <div className="flex h-[calc(100vh-80px)] items-center justify-center">
+        <p className="text-gray-500">
+          Please log in as a company to view messages.
+        </p>
+      </div>
+    );
+  }
+
+  return (
     <div className="flex h-[calc(100vh-80px)] rounded-3xl overflow-hidden shadow-2xl border bg-gradient-to-br from-green-50 via-white to-emerald-100">
 
       {/* ---------------- LEFT PANEL ---------------- */}
       <div className="w-1/4 backdrop-blur-lg bg-white/60 border-r flex flex-col">
 
-        {/* Search */}
         <div className="p-4 border-b">
           <div className="flex items-center bg-white/80 px-3 py-2 rounded-xl border shadow-sm focus-within:ring-2 focus-within:ring-green-400 transition">
             <Search size={16} className="text-gray-400" />
@@ -131,7 +195,6 @@ return (
           </div>
         </div>
 
-        {/* Farmers List */}
         <div className="flex-1 overflow-y-auto">
           {filteredFarmers.length === 0 && (
             <p className="text-center text-gray-400 text-sm mt-6">
@@ -161,7 +224,6 @@ return (
       {/* ---------------- CHAT PANEL ---------------- */}
       <div className="flex-1 flex flex-col backdrop-blur-lg bg-white/40">
 
-        {/* Header */}
         <div className="p-4 border-b bg-white/60 backdrop-blur-md">
           <p className="font-semibold text-gray-800">
             {selectedFarmer?.name || "Select a farmer"}
@@ -171,7 +233,6 @@ return (
           </p>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
 
           {!selectedFarmer && (
@@ -206,9 +267,9 @@ return (
               </div>
             );
           })}
+          <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
         {selectedFarmer && (
           <div className="p-3 border-t flex items-center gap-2 bg-white/70 backdrop-blur-md">
             <input

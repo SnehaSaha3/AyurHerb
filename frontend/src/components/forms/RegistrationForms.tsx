@@ -26,9 +26,10 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
     name: "",
     contact: "",
     email: "",
+    password: "",
     address: "",
     herb: "",
-    location:""
+    location: "",
   });
 
   const [message, setMessage] = useState("");
@@ -50,10 +51,20 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
           ? "http://localhost:8000/api/farmers/register"
           : "http://localhost:8000/api/companies/register";
 
+      // Farmer registration doesn't use a password today, so only send
+      // it for company sign-up (which requires it on the backend).
+      const payload =
+        role === "company"
+          ? formData
+          : (() => {
+              const { password, ...rest } = formData;
+              return rest;
+            })();
+
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -63,24 +74,27 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
 
       const data = await res.json();
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem(role, JSON.stringify(data[role])); // save as farmer or company
+      // Store under a role-scoped key so a farmer session and a company
+      // session in the same browser never overwrite one another.
+      localStorage.setItem(`${role}Token`, data.token);
+      localStorage.setItem(role, JSON.stringify(data[role]));
 
       setMessage("✅ Registration successful!");
       setRegisteredData(data[role]);
-      setFormData({ name: "", contact: "", email: "", address: "", herb: "", location:"" });
+      setFormData({ name: "", contact: "", email: "", password: "", address: "", herb: "", location: "" });
 
       setTimeout(() => navigate(`/${role}-dashboard`), 1500);
     } catch (err: unknown) {
-  if (err instanceof Error) {
-    setMessage("❌ " + err.message);
-  } else {
-    setMessage("❌ An unknown error occurred");
-  }
-} finally {
-  setLoading(false);
-}
-  }
+      if (err instanceof Error) {
+        setMessage("❌ " + err.message);
+      } else {
+        setMessage("❌ An unknown error occurred");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="p-6 max-w-md mx-auto bg-white shadow-md rounded">
       <h2 className="text-xl font-bold mb-4">
@@ -109,7 +123,7 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
         />
 
         <input
-          type="text"
+          type="email"
           name="email"
           placeholder="Email"
           value={formData.email}
@@ -117,6 +131,19 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
           className="border p-2 w-full rounded"
           required
         />
+
+        {role === "company" && (
+          <input
+            type="password"
+            name="password"
+            placeholder="Password"
+            value={formData.password}
+            onChange={handleChange}
+            className="border p-2 w-full rounded"
+            required
+            minLength={6}
+          />
+        )}
 
         <input
           type="text"
