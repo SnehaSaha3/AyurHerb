@@ -1,222 +1,156 @@
-# 🌿 Ayurherb
+<div align="center">
 
-**Ayurherb** is a full-stack smart agriculture platform that integrates **AI, Blockchain, and Geospatial Intelligence** to empower farmers with better decision-making, transparency, and community collaboration.
+# AyurHerb
 
----
+A blockchain-integrated smart agriculture platform connecting farmers, transparency, and AI.
 
-## 🚀 Features
+[![React](https://img.shields.io/badge/React-Vite-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Solidity](https://img.shields.io/badge/Solidity-Hardhat-363636?logo=solidity&logoColor=white)](https://hardhat.org/)
+[![Ethers.js](https://img.shields.io/badge/ethers.js-v6-2535A0)](https://docs.ethers.org/v6/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-### 🌱 Farmer Dashboard
+</div>
 
-* Personalized dashboard for each farmer
-* View crops, profile, and activity
-* Clean and modern UI (React + Tailwind)
+AyurHerb combines AI, blockchain, and geospatial intelligence to give farmers a transparent, tamper-proof way to manage crops, connect with buyers, and get context-aware farming guidance — all in one platform.
 
-### 🌾 Crop Management
+## Features
 
-* Add and manage crops
-* Store crop data both:
+| Feature | Description |
+|---|---|
+| Farmer Dashboard | Personalized dashboard with crop tracking, profile, and activity history |
+| Crop Management | Hybrid on-chain (blockchain) + off-chain (MongoDB) storage for reliability |
+| Geo Tagging & Mapping | Real-time farm location mapping with marker clustering (react-leaflet) |
+| AI Chatbot — AyurMate | Context-aware farming assistant, moving toward a full RAG agent |
+| Weather Integration | Live weather data tied to farm location for planning decisions |
+| Real-Time Messaging | WebSocket-based company–farmer communication |
+| Authentication | JWT-based secure login for farmers and companies |
+| Blockchain Registry | Smart-contract-backed crop registry for tamper-proof records |
 
-  * **On-chain (Blockchain)**
-  * **Off-chain (MongoDB)**
-* Hybrid architecture for reliability
+## Tech Stack
 
-### 📍 Geo Tagging
+**Frontend** — React (Vite) · TypeScript · Tailwind CSS · Framer Motion · react-leaflet
 
-* Store farm locations (latitude & longitude)
-* Map-based visualization of crops
-* Foundation for nearby farmer discovery
+**Backend** — Node.js · Express.js · MongoDB (Mongoose) · WebSockets
 
-### 🤖 AI Chatbot (AyurMate)
+**Blockchain** — Solidity · Hardhat · ethers.js v6
 
-* AI-powered farming assistant
-* Context-aware suggestions using:
+**AI & Data** — Retrieval-Augmented Generation (RAG) · BERT (sentiment analysis, in progress)
 
-  * Weather data
-  * Farm location
-* Moving towards **RAG Agent architecture**
-
-### 🌦 Weather Integration
-
-* Real-time weather data based on farm location
-* Helps in crop planning & decision making
-
-### 🔐 Authentication
-
-* JWT-based authentication
-* Secure farmer login system
-
-### ⛓ Blockchain Integration
-
-* Smart contract for crop registry
-* Transparent and tamper-proof data storage
-* Built using **Solidity + Hardhat**
-
----
-
-## 🏗 Tech Stack
-
-### Frontend
-
-* React (Vite)
-* TypeScript
-* Tailwind CSS
-* Framer Motion
-
-### Backend
-
-* Node.js
-* Express.js
-* MongoDB (Mongoose)
-
-### Blockchain
-
-* Solidity
-* Hardhat
-* Ethers.js
-
-### AI & Data
-
-* RAG (Retrieval-Augmented Generation)
-* BERT (Sentiment Analysis - in progress)
-
----
-
-## 📁 Project Structure
+## Project Structure
 
 ```
-Ayurherb/
-│
+AyurHerb/
 ├── frontend/
 │   ├── components/
 │   ├── pages/
 │   ├── dashboard/
 │   └── services/
-│
 ├── backend/
 │   ├── routes/
 │   ├── models/
 │   ├── controllers/
 │   └── middlewares/
-│
 ├── blockchain/
 │   ├── contracts/
 │   ├── scripts/
 │   └── artifacts/
-│
+├── chatbot/
 └── README.md
 ```
 
----
+## Local Setup
 
-## ⚙️ Setup Instructions
+**Requirements:** Node.js 18+, npm, MongoDB instance
 
-### 1️⃣ Clone the Repository
+### 1. Clone the repository
 
+```bash
+git clone https://github.com/SnehaSaha3/AyurHerb.git
+cd AyurHerb
 ```
-git clone https://github.com/your-username/ayurherb.git
-cd ayurherb
-```
 
----
+### 2. Backend setup
 
-### 2️⃣ Backend Setup
-
-```
+```bash
 cd backend
 npm install
 ```
 
-Create `.env` file:
+Create a `.env` file:
 
-```
+```env
 PORT=8000
 MONGO_URI=your_mongodb_url
 JWT_SECRET=your_secret
 ```
 
-Run server:
+Run the server:
 
-```
+```bash
 npm run dev
 ```
 
----
+### 3. Frontend setup
 
-### 3️⃣ Frontend Setup
-
-```
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
----
+### 4. Blockchain setup
 
-### 4️⃣ Blockchain Setup
-
-```
+```bash
 cd blockchain
 npm install
 npx hardhat node
 ```
 
-Deploy contract:
+Deploy the contract:
 
-```
+```bash
 npx hardhat run scripts/deploy.ts --network localhost
 ```
 
----
+## API Endpoints
 
-## 🔄 API Endpoints
+**Farmer**
+```
+POST  /api/farmers/register
+GET   /api/farmers/profile
+GET   /api/farmers/farmer-dashboard
+```
 
-### Farmer
+**Crops**
+```
+POST  /api/crops/add
+GET   /api/crops/mine
+GET   /api/crops
+```
 
-* `POST /api/farmers/register`
-* `GET /api/farmers/profile`
-* `GET /api/farmers/farmer-dashboard`
+## Roadmap
 
-### Crops
+- [ ] Nearby farmer discovery (map clustering)
+- [ ] Community messaging system
+- [ ] Advanced RAG agent for AyurMate
+- [ ] Data analytics dashboard
+- [ ] Multi-language support
+- [ ] Fully decentralized identity (DID)
 
-* `POST /api/crops/add`
-* `GET /api/crops/mine`
-* `GET /api/crops`
+## Goals
 
----
+- Build a farmer-first digital ecosystem
+- Enable transparent, verifiable agriculture data
+- Combine AI and blockchain for real-world impact
 
-## 🧠 Future Roadmap
+## Contributing
 
-* 🔍 Nearby Farmers Discovery (Map Clustering)
-* 💬 Community Messaging (Discord-like system)
-* 🧠 Advanced RAG Agent (context-aware AI)
-* 📊 Data Analytics Dashboard
-* 🌍 Multi-language Support
-* 🔗 Fully decentralized identity (DID)
+Contributions, ideas, and collaborations are welcome. Fork the repo, create a feature branch, and open a PR.
 
----
+## License
 
-## 🎯 Goals
-
-* Build a **farmer-first ecosystem**
-* Enable **transparent agriculture data**
-* Combine **AI + Blockchain for real-world impact**
-
----
-
-## 👩‍💻 Author
-
-**Sneha Saha**
-
----
-
-## ⭐ Contribute
-
-Contributions, ideas, and collaborations are welcome!
-Feel free to fork the repo and raise a PR 🚀
-
----
-
-## 📜 License
-
-This project is licensed under the MIT License.
+Licensed under the [MIT License](LICENSE).
