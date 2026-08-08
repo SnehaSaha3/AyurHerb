@@ -1,109 +1,61 @@
 import { Router, Request, Response } from "express";
-import jwt from "jsonwebtoken";
 import Farmer from "../models/farmer";
 import { authMiddleware } from "../middlewares/authMiddleware";
-import { sendRegistrationEmail } from "../services/EmailService";
-import { ethers } from "ethers";
+import { registerFarmer, loginFarmer } from "../controllers/farmerController";
 
 const router = Router();
 
-// --- Register Farmer ---
-router.post("/register", async (req: Request, res: Response) => {
-  try {
-    const { name, contact, email, address, herb } = req.body;
+router.post("/register", registerFarmer);
+router.post("/login", loginFarmer);
 
-    // Generate blockchain wallet
-    const wallet = ethers.Wallet.createRandom();
-
-    const newFarmer = new Farmer({
-      name,
-      contact,
-      email,
-      address,
-      herb,
-      walletAddress: wallet.address,
-      privateKey: wallet.privateKey, // ⚠️ encrypt in prod
-      crops: [],
-    });
-
-    await newFarmer.save();
-
-    const token = jwt.sign(
-      { farmerId: newFarmer._id, walletAddress: newFarmer.walletAddress },
-      process.env.JWT_SECRET as string,
-      { expiresIn: "7d" }
-    );
-
-    if (newFarmer.email) {
-      await sendRegistrationEmail(newFarmer.email, newFarmer.name);
-    }
-
-    res.status(201).json({
-      farmer: {
-        id: newFarmer._id,
-        name: newFarmer.name,
-        email: newFarmer.email,
-        walletAddress: newFarmer.walletAddress,
-        crops: newFarmer.crops,
-      },
-      token,
-    });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// --- Farmer Profile (Protected) ---
-router.get("/profile", authMiddleware, async (req: any, res: Response) => {
-  try {
-    const farmer = await Farmer.findById(req.user.farmerId);
-    if (!farmer) return res.status(404).json({ error: "Farmer not found" });
-    res.json(farmer);
-  } catch {
-    res.status(401).json({ error: "Invalid or expired token" });
-  }
-});
-
-// --- Get current farmer ---
+/* -------------------- CURRENT FARMER (Protected) -------------------- */
 router.get("/me", authMiddleware, async (req: any, res: Response) => {
   try {
-    const farmer = await Farmer.findById(req.user.farmerId);
-    if (!farmer) return res.status(404).json({ error: "Farmer not found" });
-    res.json(farmer);
-  } catch {
+    const farmer = await Farmer.findById(req.user.farmerId).select("-password -privateKey");
+
+    if (!farmer) {
+      return res.status(404).json({ error: "Farmer not found" });
+    }
+
+    return res.json({ farmer });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
-
-// 👉 Dashboard alias
-router.get("/farmer-dashboard", authMiddleware, async (req: any, res: Response) => {
+/* -------------------- SINGLE FARMER BY MONGO _id -------------------- */
+// Used by the map-click flow: click a pin → fetch just this farmer.
+router.get("/:farmerId", async (req: Request, res: Response) => {
   try {
-    const farmer = await Farmer.findById(req.user.farmerId);
-    if (!farmer) return res.status(404).json({ error: "Farmer not found" });
-
+    const farmer = await Farmer.findById(req.params.farmerId).select(
+      "name address herb walletAddress"
+    );
+    if (!farmer) {
+      return res.status(404).json({ success: false, error: "Farmer not found" });
+    }
     res.json({
-      id: farmer._id,
-      name: farmer.name,
-      email: farmer.email,
-      walletAddress: farmer.walletAddress,
-      crops: farmer.crops,
+      success: true,
+      farmer: {
+        farmerId: farmer._id,
+        name: farmer.name,
+        address: farmer.address,
+        herb: farmer.herb,
+        walletAddress: farmer.walletAddress,
+      },
     });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load farmer", details: err });
+  } catch (err: any) {
+    // Malformed ObjectId lands here too — treat as not found, not a 500
+    res.status(404).json({ success: false, error: "Farmer not found" });
   }
 });
 
-/* ---------------- GET ALL FARMERS ---------------- */
+/* -------------------- GET ALL FARMERS -------------------- */
 router.get("/", async (_req: Request, res: Response) => {
   try {
-    const farmers = await Farmer.find().select(
-      "name address herb walletAddress"
-    );
+    const farmers = await Farmer.find({
+      walletAddress: { $exists: true, $ne: null, $nin: [""] },
+    }).select("name address herb walletAddress");
 
-    // Key by Mongo _id, NOT a separate `farmerId` schema field — this
-    // must match what CropMap passes in the "View Farmer" redirect
-    // (?farmerId=<mongo _id>), or auto-selecting the farmer on the
-    // messages page silently fails to find a match.
     const formatted = farmers.map((f) => ({
       farmerId: f._id,
       name: f.name,
@@ -112,16 +64,10 @@ router.get("/", async (_req: Request, res: Response) => {
       walletAddress: f.walletAddress,
     }));
 
-    res.json({
-      success: true,
-      farmers: formatted,
-    });
+    res.json({ success: true, farmers: formatted });
   } catch (err: any) {
     console.error("Fetch farmers error:", err);
-    res.status(500).json({
-      success: false,
-      error: err.message || "Server error",
-    });
+    res.status(500).json({ success: false, error: err.message || "Server error" });
   }
 });
 

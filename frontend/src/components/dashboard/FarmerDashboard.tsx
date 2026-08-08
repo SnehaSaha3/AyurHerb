@@ -17,7 +17,7 @@ function FarmerDashboard() {
         }
 
         const res = await axios.get(
-          "http://localhost:8000/api/farmers/farmer-dashboard",
+          "http://localhost:8000/api/farmers/me",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -25,8 +25,8 @@ function FarmerDashboard() {
           }
         );
 
-        if (res.data && res.data.name) {
-          setFarmerName(res.data.name);
+        if (res.data?.farmer?.name) {
+          setFarmerName(res.data.farmer.name);
         } else {
           console.error("Unexpected response format:", res.data);
         }
@@ -41,18 +41,15 @@ function FarmerDashboard() {
   const farmerLinks = [
     { name: "Home", path: "/farmer-dashboard" },
     { name: "My Crops", path: "/farmer-dashboard/crops" },
+    {name: "Messages", path: "/farmer-dashboard/messages"},
     { name: "Geo Tagging", path: "/farmer-dashboard/geotagged" },
     { name: "Profile", path: "/farmer-dashboard/profile" },
   ];
 
   return (
-    <DashboardLayout
-      userType="Farmer"
-      links={farmerLinks}
-      farmerName={farmerName}
-    >
+    <DashboardLayout userType="Farmer" links={farmerLinks} farmerName={farmerName}>
       <FarmerGreeting />
-      <Outlet /> 
+      <Outlet />
     </DashboardLayout>
   );
 }

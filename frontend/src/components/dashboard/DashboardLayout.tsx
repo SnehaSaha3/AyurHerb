@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Leaf, MapPin, User, Home as HomeIcon } from "lucide-react";
+import { Leaf, MapPin, User, Home as HomeIcon, MessageCircle } from "lucide-react";
 import type { JSX, ReactNode } from "react";
 
 type DashboardProps = {
@@ -19,6 +19,7 @@ export default function DashboardLayout({
     Home: <HomeIcon className="w-5 h-5" />,
     "My Crops": <Leaf className="w-5 h-5" />,
     "Geo Tagging": <MapPin className="w-5 h-5" />,
+    Messages: <MessageCircle className="w-5 h-5" />,
     Profile: <User className="w-5 h-5" />,
   };
 
@@ -27,7 +28,7 @@ export default function DashboardLayout({
 
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r flex flex-col px-5 py-6">
-        
+
         {/* Logo */}
         <div className="mb-10">
           <h2 className="text-2xl font-bold text-green-600 tracking-tight">
@@ -75,7 +76,6 @@ export default function DashboardLayout({
 
       {/* Main */}
       <main className="flex-1 flex flex-col overflow-hidden">
-
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
