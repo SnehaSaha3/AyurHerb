@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Send, Search } from "lucide-react";
 import axios from "axios";
-import { getSocket, decodeJwtPayload } from "../../lib/Socket.client"
+import { getSocket, decodeJwtPayload } from "../../lib/Socket.client";
 
 interface Message {
   senderId: string;
@@ -36,8 +36,8 @@ export default function CompanyMessages() {
 
   /* ---------------- RESOLVE COMPANY IDENTITY + CONNECT SOCKET ---------------- */
   useEffect(() => {
-    const token = localStorage.getItem("companyToken");
-    if (!token) return; // handled by the "not logged in" state below
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
     const payload = decodeJwtPayload<{ companyId: string }>(token);
     if (!payload?.companyId) return;
@@ -48,7 +48,6 @@ export default function CompanyMessages() {
 
     socket.on("receive_message", (msg: Message) => {
       setMessages((prev) => {
-        // safety net against accidental duplicate emits (e.g. reconnects)
         if (
           prev.some(
             (m) =>
@@ -108,14 +107,18 @@ export default function CompanyMessages() {
     setFilteredFarmers(filtered);
   }, [search, farmers]);
 
-  /* ---------------- FETCH CHAT HISTORY (sockets handle new messages live) ---------------- */
+  /* ---------------- FETCH CHAT HISTORY (now authenticated) ---------------- */
   useEffect(() => {
     if (!selectedFarmer || !companyId) return;
 
     const fetchMessages = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
       try {
         const res = await axios.get(
-          `http://localhost:8000/api/messages/chat/${companyId}/${selectedFarmer.farmerId}`
+          `http://localhost:8000/api/messages/chat/${companyId}/${selectedFarmer.farmerId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
         );
 
         if (res.data.success) {
@@ -141,7 +144,7 @@ export default function CompanyMessages() {
   const sendMessage = () => {
     if (!input.trim() || !selectedFarmer || !companyId) return;
 
-    const token = localStorage.getItem("companyToken");
+    const token = localStorage.getItem("token");
     if (!token) return;
 
     const socket = getSocket(token);
@@ -159,7 +162,6 @@ export default function CompanyMessages() {
       (ack: { success: boolean; error?: string }) => {
         if (!ack?.success) {
           console.error("Message failed to send:", ack?.error);
-          // give the text back so the user can retry
           setInput(text);
         }
       }
