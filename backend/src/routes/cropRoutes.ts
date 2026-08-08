@@ -44,6 +44,10 @@ router.post("/add", authMiddleware, async (req: any, res: Response) => {
       lng,
     });
 
+   if (cropId === null) {
+  console.warn(`⚠️ upsertCropOnChain returned no cropId for farmer ${farmer._id} — check log parsing`);
+  }
+
     farmer.crops = farmer.crops || [];
     farmer.crops.push(
       new Crop({
@@ -126,11 +130,11 @@ router.get("/mine", authMiddleware, async (req: any, res: Response) => {
   }
 });
 
-/* -------------------- GET CROPS BY FARMERID -------------------- */
+
+/* -------------------- GET CROPS BY FARMER _id -------------------- */
 router.get("/:farmerId", async (req: Request, res: Response) => {
   try {
-    const { farmerId } = req.params;
-    const farmer = await Farmer.findOne({ farmerId });
+    const farmer = await Farmer.findById(req.params.farmerId);
     if (!farmer)
       return res.status(404).json({ success: false, error: "Farmer not found" });
 
@@ -169,12 +173,9 @@ router.get("/:farmerId", async (req: Request, res: Response) => {
     res.json({ success: true, crops: [...onChainFormatted, ...offChain] });
   } catch (err: any) {
     console.error("Error in GET /crops/:farmerId:", err);
-    res
-      .status(500)
-      .json({ success: false, error: err.message || "Internal Server Error" });
+    res.status(404).json({ success: false, error: "Farmer not found" });
   }
 });
-
 
 /* -------------------- GET ALL CROPS -------------------- */
 router.get("/", async (_req: Request, res: Response) => {

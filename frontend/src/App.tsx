@@ -10,14 +10,14 @@ import RegistrationForms from "./components/forms/RegistrationForms";
 import FarmerDashboard from "./components/dashboard/FarmerDashboard";
 import Profile from "./components/pages/Profile";
 import CropList from "./components/pages/CropList";
-import CropForm from "./components/forms/CropForm";
 import CropMap from "./components/maps/CropMap";
 import Home from "./components/pages/FarmerHome";
 import About from "./components/pages/About";
 import CompanyHome from "./components/dashboard/CompanyHome"
 import CompanyDashboard from "./components/dashboard/CompanyDashboard"
 import CompanyMessages from "./components/message/CompanyMessage"
-
+import FarmerMessages from "./components/message/FarmerMessage";
+import LoginForm from "./components/forms/LoginForm"
 function App() {
   const [loading, setLoading] = useState(true);
 
@@ -37,15 +37,17 @@ function App() {
         <Route path="registration" element={<RegistrationPage />} />
         <Route path="farmer-registration" element={<FarmerForm />} />
         <Route path="company-registration" element={<RegistrationForms role="company" />} />
+        <Route path="farmer-login" element={<LoginForm role="farmer" />} />
+        <Route path="company-login" element={<LoginForm role="company" />} />
       </Route>
 
       <Route path="/farmer-dashboard" element={<FarmerDashboard />}>
-        <Route index element={<Home />} />
-        <Route path="crops" element={<CropList />} />
-        <Route path="crops/add" element={<CropForm />} />
-        <Route path="geotagged" element={<CropMap />} />
-        <Route path="profile" element={<Profile />} />
-      </Route>
+  <Route index element={<Home />} />
+  <Route path="crops" element={<CropList />} />
+  <Route path="geotagged" element={<CropMap />} />
+  <Route path="messages" element={<FarmerMessages />} />
+  <Route path="profile" element={<Profile />} />
+</Route>
 
       <Route path="/company-dashboard" element={<CompanyDashboard />}>
         <Route index element={<CompanyHome />} />

@@ -53,7 +53,6 @@ export async function upsertCropOnChain(payload: {
     throw new Error(`Invalid farmer address: ${farmerAddr}`);
   }
 
-  // --- parse & scale coordinates ---
   const parsedLat = Number(lat);
   const parsedLng = Number(lng);
 
@@ -61,7 +60,7 @@ export async function upsertCropOnChain(payload: {
     throw new Error(`Invalid coordinates lat=${lat}, lng=${lng}`);
   }
 
-  // if your contract stores int micro-degrees, scale
+  // contract stores int micro-degrees, so scale before sending
   const scaledLat = BigInt(Math.round(parsedLat * 1e6));
   const scaledLng = BigInt(Math.round(parsedLng * 1e6));
 
@@ -78,7 +77,6 @@ export async function upsertCropOnChain(payload: {
   const receipt = await tx.wait();
   if (!receipt) throw new Error("Transaction failed, no receipt.");
 
-  // Parse logs to get cropId
   const iface = new ethers.Interface(CropRegistryArtifact.abi);
   let cropId: number | null = null;
 
@@ -121,7 +119,6 @@ export async function getAllCropsFromChain(): Promise <
     area: c.area,
     season: c.season,
     soil: c.soil,
-    // divide by 1e6 to get back original decimal degrees
     lat: Number(c.lat) / 1e6,
     lng: Number(c.lng) / 1e6,
     createdAt: Number(c.createdAt),

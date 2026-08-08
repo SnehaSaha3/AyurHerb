@@ -29,24 +29,34 @@ export default function CropList() {
   }, []);
 
   const fetchCrops = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("No token found.");
+  setLoading(true);
+  setError(null);
 
-      const res = await axios.get("http://localhost:8000/api/crops/mine", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+  try {
+    const token = localStorage.getItem("token");
 
-      setCrops(Array.isArray(res.data.crops) ? res.data.crops : []);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load crops");
-    } finally {
-      setLoading(false);
+    if (!token) {
+      setError("Please login first.");
+      return;
     }
-  };
+
+    const res = await axios.get(
+      "http://localhost:8000/api/crops/mine",
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    setCrops(res.data.crops || []);
+  } catch (err) {
+    console.error(err);
+    setError("Failed to load crops");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // --- Get GPS location ---
   const getLocation = () => {

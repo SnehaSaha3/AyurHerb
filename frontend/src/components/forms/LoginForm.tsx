@@ -44,7 +44,14 @@ export default function LoginForm({ role }: LoginFormProps) {
       const data: { token: string; [key: string]: unknown } = await res.json();
 
       localStorage.setItem("token", data.token);
-      localStorage.setItem(role, JSON.stringify(data[role]));
+
+if (role === "farmer") {
+  localStorage.setItem("farmer", JSON.stringify(data.farmer));
+} else {
+  localStorage.setItem("company", JSON.stringify(data.company));
+}
+
+
 
       setMessage("✅ Login successful!");
 

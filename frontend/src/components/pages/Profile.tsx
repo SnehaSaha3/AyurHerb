@@ -17,13 +17,24 @@ function Profile() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const token = localStorage.getItem("token") 
-        const res = await axios.get("http://localhost:8000/api/farmers/profile", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        setFarmer(res.data)
+        const token = localStorage.getItem("token");
+
+if (!token) {
+  console.error("No token found.");
+  return;
+}
+
+const res = await axios.get(
+  "http://localhost:8000/api/farmers/me",
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  }
+);
+
+// Backend returns { farmer: {...} }
+setFarmer(res.data.farmer);
       } catch (err) {
         console.error("Error fetching profile:", err)
       } finally {
