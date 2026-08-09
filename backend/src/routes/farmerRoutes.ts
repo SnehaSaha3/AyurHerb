@@ -2,11 +2,11 @@ import { Router, Request, Response } from "express";
 import Farmer from "../models/farmer";
 import { authMiddleware } from "../middlewares/authMiddleware";
 import { registerFarmer, loginFarmer } from "../controllers/farmerController";
-
+import { loginLimiter, registerLimiter } from "../middlewares/rateLimiter"
 const router = Router();
 
-router.post("/register", registerFarmer);
-router.post("/login", loginFarmer);
+router.post("/register", registerLimiter, registerFarmer);
+router.post("/login", loginLimiter, loginFarmer);
 
 /* -------------------- CURRENT FARMER (Protected) -------------------- */
 router.get("/me", authMiddleware, async (req: any, res: Response) => {
@@ -54,7 +54,7 @@ router.get("/", async (_req: Request, res: Response) => {
   try {
     const farmers = await Farmer.find({
       walletAddress: { $exists: true, $ne: null, $nin: [""] },
-    }).select("name address herb walletAddress");
+    }).select("name address herb walletAddress crops lat lng");
 
     const formatted = farmers.map((f) => ({
       farmerId: f._id,
@@ -62,6 +62,9 @@ router.get("/", async (_req: Request, res: Response) => {
       address: f.address,
       herb: f.herb,
       walletAddress: f.walletAddress,
+      crops: f.crops || [],
+      lat: f.lat,
+      lng: f.lng,
     }));
 
     res.json({ success: true, farmers: formatted });

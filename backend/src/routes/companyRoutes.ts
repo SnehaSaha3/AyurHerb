@@ -2,17 +2,18 @@ import { Router, Request, Response } from "express";
 import { registerCompany, loginCompany } from "../controllers/companyController";
 import { companyAuthMiddleware } from "../middlewares/companyAuthMiddleware";
 import Company from "../models/company";
+import { loginLimiter, registerLimiter } from "../middlewares/rateLimiter";
 
 const router = Router();
 
-router.post("/register", registerCompany);
-router.post("/login", loginCompany);
+router.post("/register", registerLimiter, registerCompany);
+router.post("/login", loginLimiter, loginCompany);
 
 router.get("/me", companyAuthMiddleware, async (req: any, res: Response) => {
   try {
     const company = await Company.findById(req.user.companyId).select("-password");
     if (!company) return res.status(404).json({ error: "Company not found" });
-    res.json(company);
+    res.json({ company });
   } catch {
     res.status(500).json({ error: "Server error" });
   }

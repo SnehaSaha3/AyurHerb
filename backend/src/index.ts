@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-dotenv.config(); // must be the very first thing that runs, before any other import touches process.env
+dotenv.config(); 
 
 import express from "express";
 import http from "http";
