@@ -33,7 +33,7 @@ export default function CropList() {
   setError(null);
 
   try {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("farmerToken");
 
     if (!token) {
       setError("Please login first.");

@@ -105,8 +105,10 @@ localStorage.setItem("token", data.token);
 
 // Save user details
 if (role === "farmer") {
+  localStorage.setItem("farmerToken", data.token);
   localStorage.setItem("farmer", JSON.stringify(data.farmer));
 } else {
+  localStorage.setItem("companyToken", data.token);
   localStorage.setItem("company", JSON.stringify(data.company));
 }
 

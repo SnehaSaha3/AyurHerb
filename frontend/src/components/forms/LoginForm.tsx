@@ -43,11 +43,11 @@ export default function LoginForm({ role }: LoginFormProps) {
 
       const data: { token: string; [key: string]: unknown } = await res.json();
 
-      localStorage.setItem("token", data.token);
-
 if (role === "farmer") {
+  localStorage.setItem("farmerToken", data.token);
   localStorage.setItem("farmer", JSON.stringify(data.farmer));
 } else {
+  localStorage.setItem("companyToken", data.token);
   localStorage.setItem("company", JSON.stringify(data.company));
 }
 
