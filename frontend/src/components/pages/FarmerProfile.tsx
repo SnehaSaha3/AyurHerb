@@ -17,7 +17,7 @@ function Profile() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem("farmerToken");
 
 if (!token) {
   console.error("No token found.");

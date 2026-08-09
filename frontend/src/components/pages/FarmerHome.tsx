@@ -32,7 +32,7 @@ export default function FarmerHome() {
   useEffect(() => {
     const fetchCrops = async () => {
       try {
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem("farmerToken");
         if (!token) return;
 
         const res = await axios.get(

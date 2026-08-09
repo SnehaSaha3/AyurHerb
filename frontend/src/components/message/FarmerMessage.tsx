@@ -35,7 +35,7 @@ export default function FarmerMessages() {
 
   /* ---------------- RESOLVE FARMER IDENTITY + CONNECT SOCKET ---------------- */
  useEffect(() => {
-     const token = localStorage.getItem("token");
+     const token = localStorage.getItem("farmerToken");
      if (!token) return;
  
      const payload = decodeJwtPayload<{ farmerId: string }>(token);
@@ -111,7 +111,7 @@ setFarmerId(payload.farmerId);
   if (!selectedCompany || !farmerId) return;
 
   const fetchMessages = async () => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("farmerToken");
     if (!token) return;
 
     try {
@@ -143,7 +143,7 @@ setFarmerId(payload.farmerId);
   const sendMessage = () => {
     if (!input.trim() || !selectedCompany || !farmerId) return;
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("farmerToken");
     if (!token) return;
 
     const socket = getSocket(token);

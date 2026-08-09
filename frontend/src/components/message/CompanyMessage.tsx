@@ -13,12 +13,43 @@ interface Message {
   createdAt: string;
 }
 
+interface CropEntry {
+  cropId?: string;
+  cropName: string;
+  soilType?: string;
+  season?: string;
+}
+
 interface Farmer {
   farmerId: string;
   name: string;
   address?: string;
   herb?: string;
   walletAddress?: string;
+  crops?: CropEntry[];
+}
+
+// Placeholder crop icon lookup — no real crop photos in the data model
+// yet, so this stands in for a "photo" per crop, same as CropMap.tsx.
+// Swap for crop.imageUrl once image upload exists.
+const CROP_ICONS: Record<string, string> = {
+  ashwagandha: "🌿",
+  tulsi: "🍃",
+  "aloe vera": "🪴",
+  neem: "🌳",
+  turmeric: "🟡",
+  ginger: "🫚",
+};
+
+function getCropIcon(cropName: string): string {
+  const key = cropName.trim().toLowerCase();
+  return CROP_ICONS[key] || "🌱";
+}
+
+function getFarmerCrops(f: Farmer): CropEntry[] {
+  if (f.crops && f.crops.length > 0) return f.crops;
+  if (f.herb) return [{ cropName: f.herb }];
+  return [];
 }
 
 export default function CompanyMessages() {
@@ -31,12 +62,13 @@ export default function CompanyMessages() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
+  const [expandedFarmerId, setExpandedFarmerId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   /* ---------------- RESOLVE COMPANY IDENTITY + CONNECT SOCKET ---------------- */
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("companyToken");
     if (!token) return;
 
     const payload = decodeJwtPayload<{ companyId: string }>(token);
@@ -99,20 +131,25 @@ export default function CompanyMessages() {
     if (match) setSelectedFarmer(match);
   }, [searchParams, farmers]);
 
-  /* ---------------- SEARCH FILTER ---------------- */
+  /* ---------------- CROP SEARCH FILTER ---------------- */
   useEffect(() => {
-    const filtered = farmers.filter((f) =>
-      f.name.toLowerCase().includes(search.toLowerCase())
+    if (!search.trim()) {
+      setFilteredFarmers(farmers);
+      return;
+    }
+    const q = search.toLowerCase();
+    const matched = farmers.filter((f) =>
+      getFarmerCrops(f).some((c) => c.cropName.toLowerCase().includes(q))
     );
-    setFilteredFarmers(filtered);
+    setFilteredFarmers(matched);
   }, [search, farmers]);
 
-  /* ---------------- FETCH CHAT HISTORY (now authenticated) ---------------- */
+  /* ---------------- FETCH CHAT HISTORY (authenticated) ---------------- */
   useEffect(() => {
     if (!selectedFarmer || !companyId) return;
 
     const fetchMessages = async () => {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("companyToken");
       if (!token) return;
 
       try {
@@ -144,7 +181,7 @@ export default function CompanyMessages() {
   const sendMessage = () => {
     if (!input.trim() || !selectedFarmer || !companyId) return;
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("companyToken");
     if (!token) return;
 
     const socket = getSocket(token);
@@ -191,7 +228,7 @@ export default function CompanyMessages() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search farmers..."
+              placeholder="Search by crop (e.g. Tulsi)..."
               className="ml-2 text-sm outline-none w-full bg-transparent"
             />
           </div>
@@ -204,22 +241,65 @@ export default function CompanyMessages() {
             </p>
           )}
 
-          {filteredFarmers.map((f) => (
-            <div
-              key={f.farmerId}
-              onClick={() => setSelectedFarmer(f)}
-              className={`p-4 cursor-pointer transition-all duration-200 border-b ${
-                selectedFarmer?.farmerId === f.farmerId
-                  ? "bg-gradient-to-r from-green-200 to-emerald-100"
-                  : "hover:bg-green-50"
-              }`}
-            >
-              <p className="font-semibold text-sm text-gray-800">{f.name}</p>
-              <p className="text-xs text-gray-500 truncate">
-                {f.herb || "No crop info"}
-              </p>
-            </div>
-          ))}
+          {filteredFarmers.map((f) => {
+            const crops = getFarmerCrops(f);
+            const query = search.trim().toLowerCase();
+            const matchedCrop =
+              (query && crops.find((c) => c.cropName.toLowerCase().includes(query))) ||
+              crops[0];
+            const otherCount = crops.length - (matchedCrop ? 1 : 0);
+            const isExpanded = expandedFarmerId === f.farmerId;
+            const icon = getCropIcon(matchedCrop?.cropName || "");
+
+            return (
+              <div key={f.farmerId} className="border-b">
+                <div
+                  onClick={() => setSelectedFarmer(f)}
+                  className={`p-4 cursor-pointer transition-all duration-200 flex items-center gap-3 ${
+                    selectedFarmer?.farmerId === f.farmerId
+                      ? "bg-gradient-to-r from-green-200 to-emerald-100"
+                      : "hover:bg-green-50"
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-green-100 border flex items-center justify-center text-lg shrink-0">
+                    {icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-gray-800 truncate">{f.name}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {matchedCrop?.cropName || "No crop info"}
+                      {otherCount > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedFarmerId(isExpanded ? null : f.farmerId);
+                          }}
+                          className="ml-1 text-green-600 font-medium hover:underline"
+                        >
+                          +{otherCount}
+                        </button>
+                      )}
+                    </p>
+                    {f.address && (
+                      <p className="text-[11px] text-gray-400 truncate">📍 {f.address}</p>
+                    )}
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="pl-16 pb-3 pr-4 space-y-1">
+                    {crops.map((c, i) => (
+                      <div key={c.cropId ?? i} className="text-xs text-gray-600 flex items-center gap-2">
+                        <span>{getCropIcon(c.cropName)}</span>
+                        <span>{c.cropName}</span>
+                        {c.season && <span className="text-gray-400">· {c.season}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -310,10 +390,22 @@ export default function CompanyMessages() {
               {selectedFarmer.address || "—"}
             </p>
 
-            <p>
-              <span className="text-gray-500">Herb:</span>{" "}
-              {selectedFarmer.herb || "—"}
-            </p>
+            <div className="space-y-1">
+              <span className="text-gray-500">Crops:</span>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {getFarmerCrops(selectedFarmer).map((c, i) => (
+                  <span
+                    key={c.cropId ?? i}
+                    className="text-xs bg-green-50 border border-green-200 rounded-full px-2 py-0.5 flex items-center gap-1"
+                  >
+                    {getCropIcon(c.cropName)} {c.cropName}
+                  </span>
+                ))}
+                {getFarmerCrops(selectedFarmer).length === 0 && (
+                  <span className="text-xs text-gray-400">—</span>
+                )}
+              </div>
+            </div>
 
             <p className="truncate">
               <span className="text-gray-500">Wallet:</span>{" "}

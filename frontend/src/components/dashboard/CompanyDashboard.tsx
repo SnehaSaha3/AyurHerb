@@ -7,7 +7,7 @@ import {
   BarChart3,
   MessageSquare,
   Bell,
-  Search,
+  User
 } from "lucide-react"
 
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
@@ -23,6 +23,7 @@ export default function CompanyDashboard() {
     { name: "Shipments", icon: <Truck />, path: "/company-dashboard/shipments" },
     { name: "Analytics", icon: <BarChart3 />, path: "/company-dashboard/analytics" },
     { name: "Messages", icon: <MessageSquare />, path: "/company-dashboard/messages" },
+    { name: "Profile", icon: <User />, path: "/company-dashboard/profile" },
   ];
 
   return (
@@ -68,14 +69,6 @@ export default function CompanyDashboard() {
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
 
-          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border w-72">
-            <Search size={16} className="text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search farmers, crops..."
-              className="outline-none text-sm w-full"
-            />
-          </div>
 
           <div className="flex items-center gap-4">
             <Bell className="text-gray-500 cursor-pointer" />
