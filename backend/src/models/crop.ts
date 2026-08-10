@@ -7,6 +7,7 @@ export interface ICrop extends Document {
   location: { lat: number; lng: number }
   season?: string
   soilType?: string
+  quantity: number
   createdAt?: Date
 }
 
@@ -19,6 +20,7 @@ const cropSchema = new Schema<ICrop>({
   },
   season: { type: String },
   soilType: { type: String },
+  quantity: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
 })
 
