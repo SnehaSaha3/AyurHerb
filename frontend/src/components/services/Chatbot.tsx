@@ -1,7 +1,7 @@
 import axios from "axios";
 
 interface ChatbotContext {
-  location?: string; // "lat,lng"
+  location?: string; 
   weather?: {
     temp?: number;
     description?: string;

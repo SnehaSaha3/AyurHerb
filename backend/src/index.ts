@@ -11,6 +11,7 @@ import cropRoutes from "./routes/cropRoutes";
 import weatherRoutes from "./routes/weatherRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import { initSocket } from "./socket";
+import orderRoutes from "./routes/orderRoutes"
 
 
 const app = express();
@@ -28,6 +29,7 @@ app.use("/api/companies", companyRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/crops", cropRoutes);
 app.use("/api/weather", weatherRoutes);
+app.use("/api/orders", orderRoutes);
 
 mongoose.connect(process.env.MONGODB_URI as string)
   .then(() => console.log("✅ MongoDB connected"))

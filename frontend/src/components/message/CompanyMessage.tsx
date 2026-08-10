@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Send, Search } from "lucide-react";
+import { Send, Search, X } from "lucide-react";
 import axios from "axios";
 import { getSocket, decodeJwtPayload } from "../../lib/Socket.client";
 
@@ -18,6 +18,7 @@ interface CropEntry {
   cropName: string;
   soilType?: string;
   season?: string;
+  quantity?: number;
 }
 
 interface Farmer {
@@ -29,9 +30,6 @@ interface Farmer {
   crops?: CropEntry[];
 }
 
-// Placeholder crop icon lookup — no real crop photos in the data model
-// yet, so this stands in for a "photo" per crop, same as CropMap.tsx.
-// Swap for crop.imageUrl once image upload exists.
 const CROP_ICONS: Record<string, string> = {
   ashwagandha: "🌿",
   tulsi: "🍃",
@@ -63,6 +61,15 @@ export default function CompanyMessages() {
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [expandedFarmerId, setExpandedFarmerId] = useState<string | null>(null);
+
+  // ---- Order modal state ----
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const [orderCropId, setOrderCropId] = useState("");
+  const [orderQuantity, setOrderQuantity] = useState("");
+  const [orderAmount, setOrderAmount] = useState("");
+  const [orderGst, setOrderGst] = useState("");
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [orderStatus, setOrderStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -203,6 +210,71 @@ export default function CompanyMessages() {
         }
       }
     );
+  };
+
+  /* ---------------- OPEN ORDER MODAL ---------------- */
+  const openOrderModal = () => {
+    if (!selectedFarmer) return;
+    const crops = getFarmerCrops(selectedFarmer);
+    setOrderCropId(crops[0]?.cropId || "");
+    setOrderQuantity("");
+    setOrderAmount("");
+    setOrderGst("");
+    setOrderStatus(null);
+    setOrderModalOpen(true);
+  };
+
+  /* ---------------- SUBMIT ORDER ---------------- */
+  const submitOrder = async () => {
+    if (!selectedFarmer) return;
+
+    const crops = getFarmerCrops(selectedFarmer);
+    const chosenCrop = crops.find((c) => c.cropId === orderCropId) || crops[0];
+
+    if (!chosenCrop || !orderQuantity || !orderAmount || !orderGst.trim()) {
+      setOrderStatus({ type: "error", text: "Fill in all fields before placing the order." });
+      return;
+    }
+
+    const token = localStorage.getItem("companyToken");
+    if (!token) {
+      setOrderStatus({ type: "error", text: "Please log in again." });
+      return;
+    }
+
+    setOrderSubmitting(true);
+    setOrderStatus(null);
+
+    try {
+      const res = await axios.post(
+        "http://localhost:8000/api/orders/create",
+        {
+          farmerId: selectedFarmer.farmerId,
+          cropId: chosenCrop.cropId,
+          cropName: chosenCrop.cropName,
+          quantity: Number(orderQuantity),
+          amount: Number(orderAmount),
+          gstNumber: orderGst.trim(),
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (res.data.success) {
+        setOrderStatus({ type: "success", text: "✅ Order confirmed and logged on-chain!" });
+        setTimeout(() => setOrderModalOpen(false), 1800);
+      } else {
+        setOrderStatus({ type: "error", text: res.data.error || "Order could not be placed." });
+      }
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        setOrderStatus({ type: "error", text: err.response?.data?.error || "Order failed." });
+      } else {
+        setOrderStatus({ type: "error", text: "Unexpected error placing order." });
+      }
+      console.error(err);
+    } finally {
+      setOrderSubmitting(false);
+    }
   };
 
   /* ---------------- NOT LOGGED IN ---------------- */
@@ -413,9 +485,96 @@ export default function CompanyMessages() {
             </p>
           </div>
 
-          <button className="mt-6 w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:scale-[1.02] text-white py-2 rounded-xl shadow-md transition">
+          <button
+            onClick={openOrderModal}
+            className="mt-6 w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:scale-[1.02] text-white py-2 rounded-xl shadow-md transition"
+          >
             Place Order 🚜
           </button>
+        </div>
+      )}
+
+      {/* ---------------- PLACE ORDER MODAL ---------------- */}
+      {orderModalOpen && selectedFarmer && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000] p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 relative">
+            <button
+              onClick={() => setOrderModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 className="text-lg font-bold text-gray-800 mb-1">Place Order</h3>
+            <p className="text-xs text-gray-500 mb-4">with {selectedFarmer.name}</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Crop</label>
+                <select
+                  value={orderCropId}
+                  onChange={(e) => setOrderCropId(e.target.value)}
+                  className="border p-2 w-full rounded text-sm"
+                >
+                  {getFarmerCrops(selectedFarmer).map((c, i) => (
+                    <option key={c.cropId ?? i} value={c.cropId}>
+                      {getCropIcon(c.cropName)} {c.cropName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Quantity</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={orderQuantity}
+                  onChange={(e) => setOrderQuantity(e.target.value)}
+                  className="border p-2 w-full rounded text-sm"
+                  placeholder="e.g. 50"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Amount (₹)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={orderAmount}
+                  onChange={(e) => setOrderAmount(e.target.value)}
+                  className="border p-2 w-full rounded text-sm"
+                  placeholder="e.g. 5000"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Company GSTIN</label>
+                <input
+                  type="text"
+                  value={orderGst}
+                  onChange={(e) => setOrderGst(e.target.value.toUpperCase())}
+                  className="border p-2 w-full rounded text-sm"
+                  placeholder="22AAAAA0000A1Z5"
+                  maxLength={15}
+                />
+              </div>
+
+              {orderStatus && (
+                <p className={`text-xs ${orderStatus.type === "success" ? "text-green-600" : "text-red-600"}`}>
+                  {orderStatus.text}
+                </p>
+              )}
+
+              <button
+                onClick={submitOrder}
+                disabled={orderSubmitting}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50"
+              >
+                {orderSubmitting ? "Placing order..." : "Confirm Order"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
