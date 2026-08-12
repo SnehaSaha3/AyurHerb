@@ -1,18 +1,31 @@
 import { useEffect, useState } from "react";
-import DashboardLayout from "./DashboardLayout";
 import axios from "axios";
-import { Outlet } from "react-router-dom";
-import FarmerGreeting from "../services/Greeting";
+import DashboardLayout from "./DashboardLayout";
 
 function FarmerDashboard() {
   const [farmerName, setFarmerName] = useState("");
+  const [unreadMessages, setUnreadMessages] =
+    useState(0);
 
   useEffect(() => {
     const fetchFarmer = async () => {
       try {
-        const token = localStorage.getItem("token");
+        /*
+         * Use the same token everywhere.
+         *
+         * Your Messages component currently uses
+         * farmerToken, while this component was using
+         * token. That inconsistency can cause auth
+         * problems.
+         */
+        const token =
+          localStorage.getItem("farmerToken") ||
+          localStorage.getItem("token");
+
         if (!token) {
-          console.error("No token found, please login again");
+          console.error(
+            "No farmer token found."
+          );
           return;
         }
 
@@ -26,32 +39,62 @@ function FarmerDashboard() {
         );
 
         if (res.data?.farmer?.name) {
-          setFarmerName(res.data.farmer.name);
+          setFarmerName(
+            res.data.farmer.name
+          );
         } else {
-          console.error("Unexpected response format:", res.data);
+          console.error(
+            "Unexpected farmer response:",
+            res.data
+          );
         }
-      } catch (err) {
-        console.error("Error fetching farmer:", err);
+
+      } catch (error) {
+        console.error(
+          "Error fetching farmer:",
+          error
+        );
       }
     };
 
     fetchFarmer();
   }, []);
 
+  /*
+   * Navigation for farmer workspace.
+   */
   const farmerLinks = [
-    { name: "Home", path: "/farmer-dashboard" },
-    { name: "My Crops", path: "/farmer-dashboard/crops" },
-    {name: "Messages", path: "/farmer-dashboard/messages"},
-    { name: "Geo Tagging", path: "/farmer-dashboard/geotagged" },
-    { name: "Profile", path: "/farmer-dashboard/profile" },
+    {
+      name: "Home",
+      path: "/farmer-dashboard",
+    },
+    {
+      name: "My Crops",
+      path: "/farmer-dashboard/crops",
+    },
+    {
+      name: "Messages",
+      path: "/farmer-dashboard/messages",
+    },
+    {
+      name: "Geo Tagging",
+      path: "/farmer-dashboard/geotagged",
+    },
+    {
+      name: "Profile",
+      path: "/farmer-dashboard/profile",
+    },
   ];
 
   return (
-    <DashboardLayout userType="Farmer" links={farmerLinks} farmerName={farmerName}>
-      <FarmerGreeting />
-      <Outlet />
-    </DashboardLayout>
+    <DashboardLayout
+      userType="Farmer"
+      links={farmerLinks}
+      farmerName={farmerName}
+      unreadMessages={unreadMessages}
+    />
   );
 }
 
 export default FarmerDashboard;
+
