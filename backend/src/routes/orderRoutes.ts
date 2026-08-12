@@ -5,6 +5,8 @@ import Order from "../models/order"
 import Farmer from "../models/farmer";
 import Company from "../models/company";
 import { logConfirmedOrderOnChain } from "../controllers/orderController"
+import { createPaymentOrder, verifyPayment } from "../controllers/paymentController";
+ 
 
 const router = Router();
 const AGENTS_URL = process.env.AGENTS_URL || "http://localhost:8001";
@@ -96,5 +98,9 @@ router.post("/create", companyAuthMiddleware, async (req: any, res: Response) =>
     res.status(500).json({ success: false, error: err.message || "Server error" });
   }
 });
+
+
+router.post("/:orderId/create-payment", companyAuthMiddleware, createPaymentOrder);
+router.post("/:orderId/verify-payment", companyAuthMiddleware, verifyPayment);
 
 export default router;

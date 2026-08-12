@@ -57,7 +57,6 @@ export function initSocket(httpServer: HTTPServer) {
   io.on("connection", (socket: AuthedSocket) => {
     const room = `${socket.userType}:${socket.userId}`;
     socket.join(room);
-    console.log(`🔌 ${socket.userType} ${socket.userId} connected → room ${room}`);
 
     socket.on(
       "send_message",
@@ -96,7 +95,6 @@ export function initSocket(httpServer: HTTPServer) {
     );
 
     socket.on("disconnect", () => {
-      console.log(`❌ ${socket.userType} ${socket.userId} disconnected`);
     });
   });
 
