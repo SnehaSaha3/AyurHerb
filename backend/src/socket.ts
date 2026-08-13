@@ -14,6 +14,11 @@ interface SendMessagePayload {
   text: string;
 }
 
+// Module-level reference so other files (paymentController,
+// adminController, etc.) can emit without needing the httpServer/io
+// wiring themselves — set once in initSocket(), read via emitToUser().
+let ioInstance: SocketIOServer | null = null;
+
 /**
  * Attaches Socket.IO to the same HTTP server Express is running on.
  * Auth: client connects with `auth: { token }` — same JWT_SECRET / shape
@@ -27,6 +32,8 @@ export function initSocket(httpServer: HTTPServer) {
       methods: ["GET", "POST"],
     },
   });
+
+  ioInstance = io;
 
   io.use((socket: AuthedSocket, next) => {
     const token = socket.handshake.auth?.token;
@@ -99,4 +106,30 @@ export function initSocket(httpServer: HTTPServer) {
   });
 
   return io;
+}
+
+/**
+ * Fire-and-forget notification to one user's room — same
+ * `${userType}:${userId}` room every connected socket already joins on
+ * connect, so this reuses your existing room convention rather than
+ * introducing a second one. Safe to call before a socket connects or
+ * after it disconnects — .to(room).emit() on an empty room is a no-op,
+ * not an error, so order/payment flows never need to check "is this
+ * user online" before calling it.
+ *
+ * Not used for chat (send_message/receive_message keep their existing
+ * client-driven flow) — this is for server-initiated events: payment
+ * received, invoice ready, order held, etc.
+ */
+export function emitToUser(
+  userId: string,
+  userType: "farmer" | "company",
+  event: string,
+  payload: unknown
+) {
+  if (!ioInstance) {
+    console.warn(`emitToUser called before initSocket() — dropped event "${event}" for ${userType}:${userId}`);
+    return;
+  }
+  ioInstance.to(`${userType}:${userId}`).emit(event, payload);
 }

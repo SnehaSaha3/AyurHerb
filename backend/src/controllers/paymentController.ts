@@ -2,15 +2,13 @@ import { Response } from "express";
 import axios from "axios";
 import Order from "../models/order";
 import Company from "../models/company";
-import Farmer from "../models/farmer"
+import Farmer from "../models/farmer"; 
 import { createRazorpayOrder, verifyPaymentSignature } from "../services/paymentService";
 import { generateQrToken, generateQrCodeDataUrl } from "../services/qrService";
 import { computeOrderFees } from "../services/feeService";
+import { decrementFarmerStock } from "../services/farmerStock";
 import { logEscrowFundedOnChain } from "./orderController";
-// import { emitToUser } from "../sockets/socketService";
-// ^ ADAPT: point this at your actual Socket.IO helper. Every notifyFarmer()
-// / notifyCompany() call below is written against a generic
-// `emitToUser(userId, event, payload)` shape — swap in your real one.
+import { emitToUser } from "../socket";
 
 const AGENTS_URL = process.env.AGENTS_URL || "http://localhost:8001";
 
@@ -82,6 +80,28 @@ export async function verifyPayment(req: any, res: Response) {
       return res.status(400).json({ error: "Payment signature verification failed" });
     }
 
+    // Stock is reserved HERE — at confirmed payment, not at order
+    // creation. This is the atomic guard against overselling; see
+    // farmerStockService.ts for why. If this fails, money was already
+    // captured by Razorpay (test mode) — in a live integration this
+    // is exactly where you'd trigger an automatic refund. Flagging
+    // that as a TODO rather than building refund flow speculatively.
+    const stockResult = await decrementFarmerStock(
+      order.farmerId.toString(),
+      order.cropId,
+      order.quantity
+    );
+    if (!stockResult.success) {
+      order.status = "rejected";
+      await order.save();
+      // TODO: trigger Razorpay refund here once you're off test mode —
+      // razorpay.payments.refund(razorpayPaymentId)
+      return res.status(409).json({
+        error: stockResult.reason,
+        note: "Payment was captured but stock could not be reserved — refund required in a live integration",
+      });
+    }
+
     order.escrow.razorpayPaymentId = razorpayPaymentId;
     order.escrow.razorpaySignature = razorpaySignature;
     order.escrow.fundedAt = new Date();
@@ -125,8 +145,11 @@ export async function verifyPayment(req: any, res: Response) {
       order.adminReview = { decision: "pending" };
       await order.save();
 
-      // notifyAdmin — new order waiting in the review queue
-      // emitToUser(ADMIN_CHANNEL, "admin:review_queue_updated", { orderId: order.id });
+      // Admin doesn't have a socket room yet — there's no adminId path
+      // in socketService's JWT decode, only farmerId/companyId. Real-time
+      // "new item in review queue" notification needs admin auth built
+      // first (tracked in GAP_AUDIT.md). Admin sees it by polling/loading
+      // GET /admin/review-queue for now, not via push.
 
       return res.json({ success: true, order, routedToAdmin: true });
     }
@@ -205,15 +228,16 @@ export async function generateInvoiceAndReleaseShipmentTranche(order: any) {
   order.status = "shipment_released";
   await order.save();
 
-  // notifyFarmer — payment received + shipment instruction
-  // emitToUser(order.farmerId, "order:payment_received", {
-  //   orderId: order.id,
-  //   message: `Payment received. ${SHIPMENT_PERCENT}% transferred to your account — start shipment.`,
-  //   invoiceNumber,
-  // });
+  emitToUser(order.farmerId.toString(), "farmer", "order:payment_received", {
+    orderId: order.id,
+    message: `Payment received. ${SHIPMENT_PERCENT}% transferred to your account — start shipment.`,
+    invoiceNumber,
+  });
 
-  // notifyCompany — invoice ready
-  // emitToUser(order.companyId, "order:invoice_ready", { orderId: order.id, invoiceNumber });
+  emitToUser(order.companyId.toString(), "company", "order:invoice_ready", {
+    orderId: order.id,
+    invoiceNumber,
+  });
 
   return order;
 }
