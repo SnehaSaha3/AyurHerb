@@ -1,10 +1,16 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { ethers } from "ethers";
 import Company from "../models/company";
+import { encryptPrivateKey } from "../utils/walletCrypto";
 
 export const registerCompany = async (req: Request, res: Response) => {
   try {
+    if (!process.env.JWT_SECRET) {
+      throw new Error("JWT_SECRET is not defined in environment variables");
+    }
+
     const { name, email, password, contact, address } = req.body;
 
     if (!name || !email || !password) {
@@ -18,19 +24,21 @@ export const registerCompany = async (req: Request, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Same custodial pattern as registerFarmer — generate once at
+    // signup, encrypt at rest, never expose the raw key again.
+    const wallet = ethers.Wallet.createRandom();
+
     const newCompany = new Company({
       name,
       email,
       password: hashedPassword,
       contact,
       address,
+      walletAddress: wallet.address,
+      privateKey: encryptPrivateKey(wallet.privateKey),
     });
 
     await newCompany.save();
-
-    if (!process.env.JWT_SECRET) {
-      throw new Error("JWT_SECRET is not defined in environment variables");
-    }
 
     const token = jwt.sign(
       { companyId: newCompany._id },
@@ -46,6 +54,7 @@ export const registerCompany = async (req: Request, res: Response) => {
         email: newCompany.email,
         contact: newCompany.contact,
         address: newCompany.address,
+        walletAddress: newCompany.walletAddress,
       },
       token,
     });
@@ -91,6 +100,7 @@ export const loginCompany = async (req: Request, res: Response) => {
         email: company.email,
         contact: company.contact,
         address: company.address,
+        walletAddress: company.walletAddress,
       },
       token,
     });
@@ -99,4 +109,3 @@ export const loginCompany = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to log in" });
   }
 };
-

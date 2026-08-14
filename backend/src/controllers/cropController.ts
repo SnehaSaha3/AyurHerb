@@ -11,12 +11,27 @@ const provider = new ethers.JsonRpcProvider(
 const wallet = new ethers.Wallet(process.env.PRIVATE_KEY as string, provider);
 
 // --- Contract instance ---
+// FIXED: your CropRegistry.sol no longer has upsertCrop() — it was
+// split into addCrop() (always creates new) and updateCrop() (mutates
+// in place, checks farmer ownership). The type binding below and the
+// call inside upsertCropOnChain() now match that real contract.
 const cropRegistry = new ethers.Contract(
   process.env.CROP_REGISTRY_ADDRESS as string,
   CropRegistryArtifact.abi,
   wallet
 ) as ethers.Contract & {
-  upsertCrop(
+  addCrop(
+    farmerAddr: string,
+    name: string,
+    area: string,
+    season: string,
+    soil: string,
+    lat: bigint,
+    lng: bigint
+  ): Promise<ethers.ContractTransactionResponse>;
+
+  updateCrop(
+    cropId: bigint | number,
     farmerAddr: string,
     name: string,
     area: string,
@@ -30,8 +45,12 @@ const cropRegistry = new ethers.Contract(
 };
 
 // -------------------------------------------------------------
-// Create / Update crop on chain
+// Create crop on chain
 // -------------------------------------------------------------
+// Exported name kept as `upsertCropOnChain` (not renamed to
+// `addCropOnChain`) so cropRoutes.ts's existing import doesn't need
+// to change — only the internal contract call changed, from the
+// now-nonexistent upsertCrop() to the real addCrop().
 export async function upsertCropOnChain(payload: {
   farmerAddr: string;
   name: string;
@@ -60,11 +79,10 @@ export async function upsertCropOnChain(payload: {
     throw new Error(`Invalid coordinates lat=${lat}, lng=${lng}`);
   }
 
-  // contract stores int micro-degrees, so scale before sending
   const scaledLat = BigInt(Math.round(parsedLat * 1e6));
   const scaledLng = BigInt(Math.round(parsedLng * 1e6));
 
-  const tx = await cropRegistry.upsertCrop(
+  const tx = await cropRegistry.addCrop(
     farmerAddr,
     name,
     area,
@@ -83,7 +101,7 @@ export async function upsertCropOnChain(payload: {
   for (const log of receipt.logs) {
     try {
       const parsed = iface.parseLog(log);
-      if (parsed?.name === "CropAdded" || parsed?.name === "CropUpdated") {
+      if (parsed?.name === "CropAdded") {
         cropId = Number(parsed.args[0]);
         break;
       }
@@ -93,6 +111,55 @@ export async function upsertCropOnChain(payload: {
   }
 
   return { txHash: receipt.hash, cropId };
+}
+
+// -------------------------------------------------------------
+// Update an EXISTING crop on chain (real update — same cropId,
+// no new record created). Not called by any route yet — the current
+// PATCH /api/crops/:cropId route is deliberately MongoDB-only for
+// now (see cropRoutes.ts). Wire this in once you're ready to sync
+// edits to chain too.
+// -------------------------------------------------------------
+export async function updateCropOnChain(payload: {
+  cropId: number | string;
+  farmerAddr: string;
+  name: string;
+  area: string;
+  season: string;
+  soil: string;
+  lat: number | string;
+  lng: number | string;
+}): Promise<{ txHash: string }> {
+  const { cropId, farmerAddr, name, area, season, soil, lat, lng } = payload;
+
+  if (!ethers.isAddress(farmerAddr)) {
+    throw new Error(`Invalid farmer address: ${farmerAddr}`);
+  }
+
+  const parsedLat = Number(lat);
+  const parsedLng = Number(lng);
+  if (isNaN(parsedLat) || isNaN(parsedLng)) {
+    throw new Error(`Invalid coordinates lat=${lat}, lng=${lng}`);
+  }
+
+  const scaledLat = BigInt(Math.round(parsedLat * 1e6));
+  const scaledLng = BigInt(Math.round(parsedLng * 1e6));
+
+  const tx = await cropRegistry.updateCrop(
+    BigInt(cropId),
+    farmerAddr,
+    name,
+    area,
+    season,
+    soil,
+    scaledLat,
+    scaledLng
+  );
+
+  const receipt = await tx.wait();
+  if (!receipt) throw new Error("Update transaction failed, no receipt.");
+
+  return { txHash: receipt.hash };
 }
 
 // -------------------------------------------------------------

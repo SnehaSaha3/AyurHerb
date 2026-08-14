@@ -19,7 +19,7 @@ export async function findAlternativeFarmers(
     _id: { $ne: excludeFarmerId },
     crops: {
       $elemMatch: {
-        name: new RegExp(`^${escapeRegex(cropName)}$`, "i"),
+        cropName: new RegExp(`^${escapeRegex(cropName)}$`, "i"),
         quantity: { $gte: requestedQuantity },
       },
     },
@@ -33,7 +33,7 @@ export async function findAlternativeFarmers(
   for (const farmer of farmers as any[]) {
     const matchingCrop = farmer.crops.find(
       (c: any) =>
-        c.name?.toLowerCase() === cropName.toLowerCase() &&
+        c.cropName?.toLowerCase() === cropName.toLowerCase() &&
         c.quantity >= requestedQuantity
     );
     if (!matchingCrop) continue;

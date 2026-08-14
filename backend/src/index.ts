@@ -16,9 +16,13 @@ import orderRoutes from "./routes/orderRoutes"
 
 const app = express();
 
+// FIXED: PATCH added — CropList.tsx's new Edit feature calls
+// PATCH /api/crops/:cropId, but PATCH wasn't in this allowlist, so
+// the browser's CORS preflight blocked it before the real request
+// ever reached Express.
 app.use(cors({
   origin: "http://localhost:5173",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 

@@ -7,6 +7,7 @@ export interface ICompany extends Document {
   contact?: string;
   address?: string;
   walletAddress?: string;
+  privateKey?: string;
   createdAt: Date;
 }
 
@@ -18,6 +19,7 @@ const companySchema = new Schema<ICompany>(
     contact: { type: String },
     address: { type: String },
     walletAddress: { type: String, unique: true, sparse: true },
+    privateKey: { type: String, required: false },
   },
   { timestamps: true }
 );

@@ -4,20 +4,27 @@ import { companyAuthMiddleware } from "../middlewares/companyAuthMiddleware";
 import Company from "../models/company";
 import { loginLimiter, registerLimiter } from "../middlewares/rateLimiter";
 
+
 const router = Router();
+
 
 router.post("/register", registerLimiter, registerCompany);
 router.post("/login", loginLimiter, loginCompany);
 
+
 router.get("/me", companyAuthMiddleware, async (req: any, res: Response) => {
   try {
-    const company = await Company.findById(req.user.companyId).select("-password");
+    // -privateKey added: Company now has a custodial wallet key, same
+    // as Farmer — /me must never leak it, mirroring farmerRoutes.ts's
+    // existing "-password -privateKey" guard.
+    const company = await Company.findById(req.user.companyId).select("-password -privateKey");
     if (!company) return res.status(404).json({ error: "Company not found" });
     res.json({ company });
   } catch {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 router.get("/:companyId", async (req: Request, res: Response) => {
   try {
@@ -31,6 +38,7 @@ router.get("/:companyId", async (req: Request, res: Response) => {
     res.status(404).json({ success: false, error: "Company not found" });
   }
 });
+
 
 router.get("/", async (_req: Request, res: Response) => {
   try {
@@ -47,5 +55,6 @@ router.get("/", async (_req: Request, res: Response) => {
     res.status(500).json({ success: false, error: err.message || "Server error" });
   }
 });
+
 
 export default router;
