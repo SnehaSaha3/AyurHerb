@@ -13,11 +13,23 @@ const router = Router();
 /* -------------------- ADD / UPSERT A CROP -------------------- */
 router.post("/add", authMiddleware, async (req: any, res: Response) => {
   try {
-    const { cropName, season, soilType, lat, lng } = req.body;
+    // quantity added — this was the actual gap: nothing in this route
+    // ever wrote it, so every crop silently sat at the schema default
+    // of 0 regardless of what the farmer intended. Required now, not
+    // optional — a crop listing with no quantity can't be ordered or
+    // stock-checked, so letting it default to 0 was the real bug, not
+    // a reasonable default.
+    const { cropName, season, soilType, lat, lng, quantity } = req.body;
     if (!cropName || lat === undefined || lng === undefined) {
       return res.status(400).json({
         success: false,
         error: "cropName, lat & lng are required",
+      });
+    }
+    if (quantity === undefined || quantity === null || isNaN(Number(quantity)) || Number(quantity) < 0) {
+      return res.status(400).json({
+        success: false,
+        error: "quantity is required and must be a non-negative number",
       });
     }
 
@@ -55,18 +67,82 @@ router.post("/add", authMiddleware, async (req: any, res: Response) => {
         cropName,
         soilType: soilType || "-",
         season: season || "-",
+        quantity: Number(quantity),
         location: { lat: Number(lat), lng: Number(lng) },
       })
     );
 
     await farmer.save();
 
-    res.json({ success: true, txHash, cropId });
+    res.json({ success: true, txHash, cropId, quantity: Number(quantity) });
   } catch (err: any) {
     console.error("Error in POST /crops/add:", err);
     res
       .status(500)
       .json({ success: false, error: err.message || "Internal Server Error" });
+  }
+});
+
+/* -------------------- EDIT A CROP (MongoDB only, for now) --------------------
+ * Scoped deliberately to Mongo, not blockchain: on-chain updateCrop()
+ * is separate in-progress work (adding quantity to CropRegistry.sol
+ * and redeploying). Blocking quantity edits on that finishing first
+ * would stall testing the escrow/stock flow for no reason — this
+ * unblocks that now. Once the on-chain side lands, this route is
+ * where the corresponding updateCropOnChain() call gets added.
+ */
+router.patch("/:cropId", authMiddleware, async (req: any, res: Response) => {
+  try {
+    const { cropId } = req.params;
+    const { cropName, soilType, season, quantity } = req.body;
+
+    if (
+      quantity !== undefined &&
+      (isNaN(Number(quantity)) || Number(quantity) < 0)
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "quantity must be a non-negative number",
+      });
+    }
+
+    const farmer = await Farmer.findById(req.user.farmerId);
+    if (!farmer) {
+      return res.status(404).json({ success: false, error: "Farmer not found" });
+    }
+
+    // Ownership check — a farmer can only edit their OWN crop. cropId
+    // alone isn't enough to prove ownership, so this must be scoped
+    // to req.user.farmerId's own crops array, not a bare Crop lookup.
+    const crop = farmer.crops?.find((c: any) => c.cropId === cropId);
+    if (!crop) {
+      return res.status(404).json({
+        success: false,
+        error: "Crop not found on this farmer's account",
+      });
+    }
+
+    if (cropName !== undefined) crop.cropName = cropName;
+    if (soilType !== undefined) crop.soilType = soilType;
+    if (season !== undefined) crop.season = season;
+    if (quantity !== undefined) crop.quantity = Number(quantity);
+
+    await farmer.save();
+
+    res.json({
+      success: true,
+      crop: {
+        cropId: crop.cropId,
+        cropName: crop.cropName,
+        soilType: crop.soilType,
+        season: crop.season,
+        quantity: crop.quantity,
+        location: crop.location,
+      },
+    });
+  } catch (err: any) {
+    console.error("Error in PATCH /crops/:cropId:", err);
+    res.status(500).json({ success: false, error: err.message || "Internal Server Error" });
   }
 });
 
@@ -105,12 +181,18 @@ router.get("/mine", authMiddleware, async (req: any, res: Response) => {
       console.warn("⚠️ farmer has no walletAddress → skipping blockchain");
     }
 
+    // quantity added — blockchain-sourced crops don't carry quantity
+    // yet (that's the separate on-chain-quantity work in progress),
+    // so onChainFormatted intentionally has no quantity field here.
+    // Off-chain (MongoDB) crops are the authoritative source for
+    // quantity right now — see the flagged collision risk on this.
     const offChain =
       farmer.crops?.map((c) => ({
         cropId: c.cropId ?? "",
         cropName: c.cropName ?? "🌱 Unknown",
         soilType: c.soilType ?? "-",
         season: c.season ?? "-",
+        quantity: c.quantity ?? 0,
         location: c.location ?? { lat: 0, lng: 0 },
         source: "MongoDB",
         farmerName: farmer.name,
@@ -164,6 +246,7 @@ router.get("/:farmerId", async (req: Request, res: Response) => {
         cropName: c.cropName ?? "🌱 Unknown",
         soilType: c.soilType ?? "-",
         season: c.season ?? "-",
+        quantity: c.quantity ?? 0,
         location: c.location ?? { lat: 0, lng: 0 },
         source: "MongoDB",
         farmerName: farmer.name,
@@ -228,6 +311,7 @@ router.get("/", async (_req: Request, res: Response) => {
           cropName: c.cropName ?? "🌱 Unknown",
           soilType: c.soilType ?? "-",
           season: c.season ?? "-",
+          quantity: c.quantity ?? 0,
           location: c.location ?? { lat: 0, lng: 0 },
           source: "MongoDB",
           farmerName: f.name,

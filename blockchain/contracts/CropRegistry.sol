@@ -17,17 +17,26 @@ contract CropRegistry {
 
     mapping(uint256 => Crop) public crops;
     mapping(address => uint256[]) public farmerCrops;
+
     uint256 public cropCount;
 
-    event CropAdded(uint256 indexed cropId, address indexed farmer, string name);
-    event CropUpdated(uint256 indexed cropId, address indexed farmer, string name);
+    event CropAdded(
+        uint256 indexed cropId,
+        address indexed farmer,
+        string name
+    );
 
-    /// @notice Adds a crop attributed to `_farmerAddr`, not msg.sender.
-    /// @dev Since a single relayer wallet submits transactions on behalf of
-    ///      all farmers, the farmer's identity must be passed explicitly.
-    ///      Add access control (e.g. onlyRelayer / signature check) if this
-    ///      contract is public, so one farmer can't spoof another's address.
-    function upsertCrop(
+    event CropUpdated(
+        uint256 indexed cropId,
+        address indexed farmer,
+        string name
+    );
+
+    // -------------------------------------------------------------
+    // ADD CROP
+    // -------------------------------------------------------------
+
+    function addCrop(
         address _farmerAddr,
         string memory _name,
         string memory _area,
@@ -35,7 +44,7 @@ contract CropRegistry {
         string memory _soil,
         int256 _lat,
         int256 _lng
-    ) public returns (uint256 cropId, bool isNew) {
+    ) public returns (uint256 cropId) {
         require(_farmerAddr != address(0), "Invalid farmer address");
 
         cropId = cropCount;
@@ -54,31 +63,107 @@ contract CropRegistry {
         });
 
         farmerCrops[_farmerAddr].push(cropId);
+
         cropCount++;
 
-        emit CropAdded(cropId, _farmerAddr, _name);
-        return (cropId, true);
+        emit CropAdded(
+            cropId,
+            _farmerAddr,
+            _name
+        );
+
+        return cropId;
     }
 
-    function getCropsByFarmer(address _farmer) public view returns (Crop[] memory) {
+    // -------------------------------------------------------------
+    // UPDATE CROP
+    // -------------------------------------------------------------
+
+    function updateCrop(
+        uint256 _cropId,
+        address _farmerAddr,
+        string memory _name,
+        string memory _area,
+        string memory _season,
+        string memory _soil,
+        int256 _lat,
+        int256 _lng
+    ) public {
+        require(_cropId < cropCount, "Crop does not exist");
+        require(_farmerAddr != address(0), "Invalid farmer address");
+
+        Crop storage crop = crops[_cropId];
+
+        require(
+            crop.farmer == _farmerAddr,
+            "Farmer does not own this crop"
+        );
+
+        crop.name = _name;
+        crop.area = _area;
+        crop.season = _season;
+        crop.soil = _soil;
+        crop.lat = _lat;
+        crop.lng = _lng;
+        crop.updatedAt = block.timestamp;
+
+        emit CropUpdated(
+            _cropId,
+            _farmerAddr,
+            _name
+        );
+    }
+
+    // -------------------------------------------------------------
+    // GET FARMER CROPS
+    // -------------------------------------------------------------
+
+    function getCropsByFarmer(
+        address _farmer
+    ) public view returns (Crop[] memory) {
+
         uint256[] memory ids = farmerCrops[_farmer];
+
         Crop[] memory list = new Crop[](ids.length);
+
         for (uint256 i = 0; i < ids.length; i++) {
             list[i] = crops[ids[i]];
         }
+
         return list;
     }
 
-    function getCrop(uint256 _cropId) public view returns (Crop memory) {
-        require(_cropId < cropCount, "Crop does not exist");
+    // -------------------------------------------------------------
+    // GET SINGLE CROP
+    // -------------------------------------------------------------
+
+    function getCrop(
+        uint256 _cropId
+    ) public view returns (Crop memory) {
+
+        require(
+            _cropId < cropCount,
+            "Crop does not exist"
+        );
+
         return crops[_cropId];
     }
 
-    function getAllCrops() public view returns (Crop[] memory) {
+    // -------------------------------------------------------------
+    // GET ALL CROPS
+    // -------------------------------------------------------------
+
+    function getAllCrops()
+        public
+        view
+        returns (Crop[] memory)
+    {
         Crop[] memory list = new Crop[](cropCount);
+
         for (uint256 i = 0; i < cropCount; i++) {
             list[i] = crops[i];
         }
+
         return list;
     }
 }
