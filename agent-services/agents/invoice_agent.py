@@ -2,7 +2,7 @@ import os
 import base64
 from groq import Groq
 from schemas import InvoiceRequest, InvoiceResponse
-from invoice_pdf import build_invoice_pdf
+from agents.invoice_pdf import build_invoice_pdf
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 

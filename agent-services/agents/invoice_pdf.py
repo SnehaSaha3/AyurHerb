@@ -9,7 +9,7 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.graphics.shapes import Drawing
 
-from brand import (
+from agents.brand import (
     BRAND_NAME, BRAND_TAGLINE,
     COLOR_PRIMARY, COLOR_ACCENT, COLOR_DARK, COLOR_MUTED, COLOR_BG_STRIP,
     HEX_MUTED, HEX_ACCENT,
