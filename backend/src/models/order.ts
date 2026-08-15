@@ -187,11 +187,12 @@ const orderSchema = new Schema<IOrder>(
     tranches: { type: [trancheSchema], default: [] },
 
     invoice: {
-      invoiceNumber: { type: String },
-      invoiceText: { type: String },
-      generatedAt: { type: Date },
-      qrToken: { type: String },
-      qrCodeDataUrl: { type: String },
+     invoiceNumber: { type: String },
+     invoiceText: { type: String },
+     invoicePdfBase64: { type: String },
+     generatedAt: { type: Date },
+     qrToken: { type: String },
+     qrCodeDataUrl: { type: String },
     },
   },
   { timestamps: true }

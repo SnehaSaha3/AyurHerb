@@ -11,6 +11,74 @@ import { createPaymentOrder, verifyPayment } from "../controllers/paymentControl
 const router = Router();
 const AGENTS_URL = process.env.AGENTS_URL || "http://localhost:8001";
 
+/* -------------------- COMPANY ORDERS -------------------- */
+router.get(
+  "/company",
+  companyAuthMiddleware,
+  async (req: any, res: Response) => {
+    try {
+      const orders = await Order.find({
+        companyId: req.user.companyId,
+      })
+        .populate("farmerId", "name address")
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const stats = {
+        activeOrders: orders.filter(
+          (o: any) =>
+            !["delivery_released", "rejected"].includes(o.status)
+        ).length,
+
+        pendingOrders: orders.filter(
+          (o: any) =>
+            [
+              "pending_verification",
+              "pending_stock_check",
+              "awaiting_payment",
+              "payment_processing",
+              "pending_admin_review",
+            ].includes(o.status)
+        ).length,
+
+        deliveredOrders: orders.filter(
+          (o: any) => o.status === "delivery_released"
+        ).length,
+
+        totalSpend: orders.reduce(
+          (total: number, o: any) => {
+            if (
+              [
+                "escrow_funded",
+                "shipment_released",
+                "delivery_released",
+              ].includes(o.status)
+            ) {
+              return total + (o.fees?.grandTotal || o.amount || 0);
+            }
+
+            return total;
+          },
+          0
+        ),
+      };
+
+      return res.json({
+        success: true,
+        orders,
+        stats,
+      });
+    } catch (err: any) {
+      console.error("Company orders error:", err);
+
+      return res.status(500).json({
+        success: false,
+        error: "Failed to fetch company orders",
+      });
+    }
+  }
+);
+
 router.post("/create", companyAuthMiddleware, async (req: any, res: Response) => {
   try {
     const { farmerId, cropId, cropName, quantity, amount, gstNumber } = req.body;

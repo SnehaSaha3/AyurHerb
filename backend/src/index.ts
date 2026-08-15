@@ -12,14 +12,11 @@ import weatherRoutes from "./routes/weatherRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import { initSocket } from "./socket";
 import orderRoutes from "./routes/orderRoutes"
+import publicVerifyRoutes from "./routes/publicRoutes"
 
 
 const app = express();
 
-// FIXED: PATCH added — CropList.tsx's new Edit feature calls
-// PATCH /api/crops/:cropId, but PATCH wasn't in this allowlist, so
-// the browser's CORS preflight blocked it before the real request
-// ever reached Express.
 app.use(cors({
   origin: "http://localhost:5173",
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -34,6 +31,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/crops", cropRoutes);
 app.use("/api/weather", weatherRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/public", publicVerifyRoutes)
 
 mongoose.connect(process.env.MONGODB_URI as string)
   .then(() => console.log("✅ MongoDB connected"))

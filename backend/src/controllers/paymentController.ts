@@ -138,22 +138,6 @@ export async function verifyPayment(req: any, res: Response) {
       farmerDisputeCount: farmer?.get("disputeCount") ?? 0,
     });
 
-    order.fraudCheck = { ...fraudRes.data, checkedAt: new Date() };
-
-    if (fraudRes.data.requiresAdminReview) {
-      order.status = "pending_admin_review";
-      order.adminReview = { decision: "pending" };
-      await order.save();
-
-      // Admin doesn't have a socket room yet — there's no adminId path
-      // in socketService's JWT decode, only farmerId/companyId. Real-time
-      // "new item in review queue" notification needs admin auth built
-      // first (tracked in GAP_AUDIT.md). Admin sees it by polling/loading
-      // GET /admin/review-queue for now, not via push.
-
-      return res.json({ success: true, order, routedToAdmin: true });
-    }
-
     // Low risk — auto-approved, straight to invoice + first tranche.
     await order.save();
     const result = await generateInvoiceAndReleaseShipmentTranche(order);
@@ -185,7 +169,7 @@ export async function generateInvoiceAndReleaseShipmentTranche(order: any) {
   // inside the invoice PDF point at the exact same place.
   const qrToken = generateQrToken();
   const baseUrl = process.env.PUBLIC_APP_URL || "http://localhost:8000";
-  const verifyUrl = `${baseUrl}/public/verify/${order.id}/${qrToken}`;
+  const verifyUrl = `${baseUrl}/api/public/verify/${order.id}/${qrToken}`;
   const qrCodeDataUrl = await generateQrCodeDataUrl(order.id, qrToken);
 
   const invoiceRes = await axios.post(`${AGENTS_URL}/escrow/generate-invoice`, {
@@ -208,7 +192,20 @@ export async function generateInvoiceAndReleaseShipmentTranche(order: any) {
     shipmentTranchePercent: SHIPMENT_PERCENT,
     deliveryTranchePercent: DELIVERY_PERCENT,
     verifyUrl,
+
+
+    
   });
+  console.log("========== INVOICE AGENT RESPONSE ==========");
+console.log("status:", invoiceRes.status);
+console.log("keys:", Object.keys(invoiceRes.data));
+console.log("invoiceText exists:", !!invoiceRes.data.invoiceText);
+console.log("pdfBase64 exists:", !!invoiceRes.data.pdfBase64);
+console.log(
+  "pdfBase64 length:",
+  invoiceRes.data.pdfBase64?.length
+);
+console.log("============================================");
 
   order.invoice = {
     invoiceNumber,
