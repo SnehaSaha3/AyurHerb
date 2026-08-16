@@ -1,4 +1,4 @@
-import { Response, Request } from "express";
+import { Response } from "express";
 import Message from "../models/message";
 import Farmer from "../models/farmer";
 import Company from "../models/company";
@@ -72,11 +72,10 @@ export const getInbox = async (req: any, res: Response) => {
 };
 
 /**
- * Conversation between one company and one farmer, identified by
- * their Mongo _ids directly in the URL. NOW AUTHENTICATED — the
- * caller must be logged in as either that exact company or that
- * exact farmer, or they get a 403. Closes the "anyone who knows two
- * IDs can read the chat" hole.
+ * Conversation between one company and one farmer. NOW also marks every
+ * message sent TO the requester in this thread as read — this is the
+ * "opening a WhatsApp chat clears the badge" behavior. No separate
+ * mark-read endpoint needed; opening the thread IS reading it.
  */
 export const getConversationByIds = async (req: any, res: Response) => {
   try {
@@ -98,9 +97,42 @@ export const getConversationByIds = async (req: any, res: Response) => {
       ],
     }).sort({ createdAt: 1 });
 
+    const otherId = selfType === "farmer" ? companyId : farmerId;
+    const otherType = selfType === "farmer" ? "company" : "farmer";
+
+    await Message.updateMany(
+      { senderId: otherId, senderType: otherType, receiverId: selfId, receiverType: selfType, read: false },
+      { $set: { read: true } }
+    );
+
     res.json({ success: true, messages });
   } catch (err: any) {
     console.error("Fetch conversation error:", err);
     res.status(500).json({ success: false, error: "Failed to fetch messages" });
+  }
+};
+
+/**
+ * Unread count per sender for the badge next to each company/farmer in
+ * the sidebar list — e.g. { "<companyId>": 3, "<companyId2>": 1 }.
+ */
+export const getUnreadCounts = async (req: any, res: Response) => {
+  try {
+    const { id: selfId, type: selfType } = req.user;
+
+    const counts = await Message.aggregate([
+      { $match: { receiverId: selfId, receiverType: selfType, read: false } },
+      { $group: { _id: "$senderId", count: { $sum: 1 } } },
+    ]);
+
+    const unreadCounts: Record<string, number> = {};
+    counts.forEach((c: any) => {
+      unreadCounts[c._id] = c.count;
+    });
+
+    res.json({ success: true, unreadCounts });
+  } catch (err: any) {
+    console.error("Fetch unread counts error:", err);
+    res.status(500).json({ success: false, error: "Failed to fetch unread counts" });
   }
 };

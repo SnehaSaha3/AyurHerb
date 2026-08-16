@@ -2,21 +2,17 @@ import { Response } from "express";
 import axios from "axios";
 import Order from "../models/order";
 import Company from "../models/company";
-import Farmer from "../models/farmer"; 
+import Farmer from "../models/farmer";
+import Message from "../models/message";
 import { createRazorpayOrder, verifyPaymentSignature } from "../services/paymentService";
 import { generateQrToken, generateQrCodeDataUrl } from "../services/qrService";
 import { computeOrderFees } from "../services/feeService";
 import { decrementFarmerStock } from "../services/farmerStock";
-import { logEscrowFundedOnChain } from "./orderController";
+import { logConfirmedOrderOnChain, logEscrowFundedOnChain } from "./orderController";
 import { emitToUser } from "../socket";
 
 const AGENTS_URL = process.env.AGENTS_URL || "http://localhost:8001";
 
-/**
- * STEP 1 — Company clicks "Pay" on an order in `awaiting_payment` status.
- * Creates a Razorpay TEST MODE order and hands back what the frontend
- * Checkout widget needs. No money moves yet.
- */
 export async function createPaymentOrder(req: any, res: Response) {
   try {
     const order = await Order.findById(req.params.orderId);
@@ -25,9 +21,6 @@ export async function createPaymentOrder(req: any, res: Response) {
       return res.status(409).json({ error: `Order is in status '${order.status}', not payable` });
     }
 
-    // Fees computed server-side from real order data — never accept
-    // fee amounts from the client. order.amount is the crop subtotal,
-    // unchanged in meaning from before this redesign.
     const fees = computeOrderFees(order.amount, order.quantity);
     order.fees = fees;
 
@@ -46,9 +39,9 @@ export async function createPaymentOrder(req: any, res: Response) {
       success: true,
       razorpayOrderId,
       amountPaise,
-      keyId, // frontend needs this to open Checkout — it's the public key, safe to expose
+      keyId,
       currency: "INR",
-      breakdown: fees, // frontend shows company the full breakdown before they pay
+      breakdown: fees,
     });
   } catch (err: any) {
     console.error("createPaymentOrder error:", err);
@@ -57,10 +50,11 @@ export async function createPaymentOrder(req: any, res: Response) {
 }
 
 /**
- * STEP 2 — Frontend Checkout returns razorpay_payment_id + signature
- * after the (test-mode) payment completes. This verifies it, marks
- * escrow funded, logs the hash on-chain, runs the fraud agent, and
- * either auto-approves (low risk) or routes to admin review.
+ * Verifies payment, reserves stock, funds escrow, runs the fraud agent,
+ * and — ONLY if all of that clears — writes the confirmed order to
+ * chain. This is the single point where `logConfirmedOrderOnChain` is
+ * called: a fake order placed with no payment never reaches here, so it
+ * never touches the ledger.
  */
 export async function verifyPayment(req: any, res: Response) {
   try {
@@ -80,12 +74,6 @@ export async function verifyPayment(req: any, res: Response) {
       return res.status(400).json({ error: "Payment signature verification failed" });
     }
 
-    // Stock is reserved HERE — at confirmed payment, not at order
-    // creation. This is the atomic guard against overselling; see
-    // farmerStockService.ts for why. If this fails, money was already
-    // captured by Razorpay (test mode) — in a live integration this
-    // is exactly where you'd trigger an automatic refund. Flagging
-    // that as a TODO rather than building refund flow speculatively.
     const stockResult = await decrementFarmerStock(
       order.farmerId.toString(),
       order.cropId,
@@ -94,8 +82,7 @@ export async function verifyPayment(req: any, res: Response) {
     if (!stockResult.success) {
       order.status = "rejected";
       await order.save();
-      // TODO: trigger Razorpay refund here once you're off test mode —
-      // razorpay.payments.refund(razorpayPaymentId)
+      // TODO: trigger Razorpay refund here once off test mode.
       return res.status(409).json({
         error: stockResult.reason,
         note: "Payment was captured but stock could not be reserved — refund required in a live integration",
@@ -107,38 +94,48 @@ export async function verifyPayment(req: any, res: Response) {
     order.escrow.fundedAt = new Date();
     order.status = "escrow_funded";
 
-    // Log ONLY the hash on-chain — see hashEscrowPayload for what's included.
-    const { txHash } = await logEscrowFundedOnChain({
+    const { txHash: escrowTxHash } = await logEscrowFundedOnChain({
       orderId: order.id,
       razorpayOrderId: order.escrow.razorpayOrderId,
       razorpayPaymentId,
       amountPaidPaise: order.escrow.amountPaidPaise!,
     });
-    order.escrow.escrowChainTxHash = txHash;
+    order.escrow.escrowChainTxHash = escrowTxHash;
 
-    // ── Fraud agent ────────────────────────────────────────────────
     const [company, farmer] = await Promise.all([
       Company.findById(order.companyId),
       Farmer.findById(order.farmerId),
     ]);
 
-    const fraudRes = await axios.post(`${AGENTS_URL}/escrow/check-fraud`, {
+    await axios.post(`${AGENTS_URL}/escrow/check-fraud`, {
       orderId: order.id,
       companyId: order.companyId.toString(),
       farmerId: order.farmerId.toString(),
       orderAmount: order.amount,
       companyVerificationPassed: order.verification.passed,
       stockCheckPassed: order.stockCheck.passed,
-      // ADAPT: wire these to real counts once you're tracking order/dispute
-      // history per company/farmer. Defaulting to 0 just means "treat as
-      // new party" until that data exists — safe, not silently wrong.
       companyPastOrderCount: company?.get("pastOrderCount") ?? 0,
       companyDisputeCount: company?.get("disputeCount") ?? 0,
       farmerPastOrderCount: farmer?.get("pastOrderCount") ?? 0,
       farmerDisputeCount: farmer?.get("disputeCount") ?? 0,
     });
 
-    // Low risk — auto-approved, straight to invoice + first tranche.
+    // Fraud check passed — this is the moment the transaction is
+    // considered real. Log the confirmed order on-chain now, not at creation.
+    if (!company?.walletAddress || !farmer?.walletAddress) {
+      throw new Error("Missing wallet address for company or farmer — cannot log confirmed order on-chain");
+    }
+
+    const { txHash: confirmedTxHash } = await logConfirmedOrderOnChain({
+      orderId: order.id,
+      companyAddr: company.walletAddress,
+      farmerAddr: farmer.walletAddress,
+      cropName: order.cropName,
+      quantity: order.quantity,
+      amount: order.amount,
+    });
+    order.chainTxHash = confirmedTxHash;
+
     await order.save();
     const result = await generateInvoiceAndReleaseShipmentTranche(order);
     res.json({ success: true, order: result, routedToAdmin: false });
@@ -148,12 +145,6 @@ export async function verifyPayment(req: any, res: Response) {
   }
 }
 
-/**
- * Shared by both the auto-approve path and the admin-approve path:
- * generates the invoice + QR, releases the shipment tranche (10%),
- * notifies both parties. Broken out so admin approval doesn't
- * duplicate this logic.
- */
 export async function generateInvoiceAndReleaseShipmentTranche(order: any) {
   const [company, farmer] = await Promise.all([
     Company.findById(order.companyId),
@@ -164,9 +155,6 @@ export async function generateInvoiceAndReleaseShipmentTranche(order: any) {
   const DELIVERY_PERCENT = 90;
   const invoiceNumber = `AH-INV-${order.id.slice(-8).toUpperCase()}`;
 
-  // Generate the QR token/URL FIRST — the invoice PDF embeds this same
-  // verify URL, so the QR printed on the farmer's packs and the QR
-  // inside the invoice PDF point at the exact same place.
   const qrToken = generateQrToken();
   const baseUrl = process.env.PUBLIC_APP_URL || "http://localhost:8000";
   const verifyUrl = `${baseUrl}/api/public/verify/${order.id}/${qrToken}`;
@@ -192,20 +180,7 @@ export async function generateInvoiceAndReleaseShipmentTranche(order: any) {
     shipmentTranchePercent: SHIPMENT_PERCENT,
     deliveryTranchePercent: DELIVERY_PERCENT,
     verifyUrl,
-
-
-    
   });
-  console.log("========== INVOICE AGENT RESPONSE ==========");
-console.log("status:", invoiceRes.status);
-console.log("keys:", Object.keys(invoiceRes.data));
-console.log("invoiceText exists:", !!invoiceRes.data.invoiceText);
-console.log("pdfBase64 exists:", !!invoiceRes.data.pdfBase64);
-console.log(
-  "pdfBase64 length:",
-  invoiceRes.data.pdfBase64?.length
-);
-console.log("============================================");
 
   order.invoice = {
     invoiceNumber,
@@ -225,6 +200,29 @@ console.log("============================================");
   order.status = "shipment_released";
   await order.save();
 
+  const shipmentTranche = order.tranches.find((t: any) => t.type === "shipment");
+
+  // Real chat message — this is what the farmer actually sees in their
+  // inbox, not just a socket toast.
+  const notifyText =
+    `💰 Payment received for ${order.cropName} (${order.quantity} kg). ` +
+    `Invoice ${invoiceNumber} generated. ` +
+    `₹${shipmentTranche?.amount.toLocaleString("en-IN")} (${SHIPMENT_PERCENT}% shipment tranche) ` +
+    `has been released to your account — you can start shipment.`;
+
+  const notifyMessage = await Message.create({
+    senderId: order.companyId.toString(),
+    senderType: "company",
+    receiverId: order.farmerId.toString(),
+    receiverType: "farmer",
+    text: notifyText,
+  });
+
+  emitToUser(order.farmerId.toString(), "farmer", "receive_message", notifyMessage);
+  emitToUser(order.companyId.toString(), "company", "receive_message", notifyMessage);
+  emitToUser(order.farmerId.toString(), "farmer", "unread:update", { senderId: order.companyId.toString(), senderType: "company" });
+
+  // Kept for any UI still listening on these specific event names.
   emitToUser(order.farmerId.toString(), "farmer", "order:payment_received", {
     orderId: order.id,
     message: `Payment received. ${SHIPMENT_PERCENT}% transferred to your account — start shipment.`,
@@ -239,13 +237,6 @@ console.log("============================================");
   return order;
 }
 
-/**
- * Fires one tranche: logs the hash on-chain, updates the subdocument,
- * marks it released. Called for "shipment" right after invoice
- * generation, and separately for "delivery" once the company/admin
- * confirms delivery (wire that trigger to your existing delivery-
- * confirmation flow if you have one).
- */
 export async function releaseTranche(order: any, type: "shipment" | "delivery") {
   const tranche = order.tranches.find((t: any) => t.type === type);
   if (!tranche || tranche.status === "released") return order;

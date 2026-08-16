@@ -61,8 +61,8 @@ export default function CompanyMessages() {
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [expandedFarmerId, setExpandedFarmerId] = useState<string | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
-  // ---- Order modal state ----
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [orderCropId, setOrderCropId] = useState("");
   const [orderQuantity, setOrderQuantity] = useState("");
@@ -73,6 +73,17 @@ export default function CompanyMessages() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const fetchUnreadCounts = async (token: string) => {
+    try {
+      const res = await axios.get("http://localhost:8000/api/messages/unread-counts", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data.success) setUnreadCounts(res.data.unreadCounts);
+    } catch (err) {
+      console.error("Error fetching unread counts", err);
+    }
+  };
+
   /* ---------------- RESOLVE COMPANY IDENTITY + CONNECT SOCKET ---------------- */
   useEffect(() => {
     const token = localStorage.getItem("companyToken");
@@ -82,27 +93,32 @@ export default function CompanyMessages() {
     if (!payload?.companyId) return;
 
     setCompanyId(payload.companyId);
+    fetchUnreadCounts(token);
 
     const socket = getSocket(token);
 
     socket.on("receive_message", (msg: Message) => {
       setMessages((prev) => {
-        if (
-          prev.some(
-            (m) =>
-              m.createdAt === msg.createdAt &&
-              m.senderId === msg.senderId &&
-              m.text === msg.text
-          )
-        ) {
+        if (prev.some((m) => m.createdAt === msg.createdAt && m.senderId === msg.senderId && m.text === msg.text)) {
           return prev;
         }
         return [...prev, msg];
       });
     });
 
+    // WhatsApp-style live badge for farmer messages (including crop
+    // health reports sent via /report, which arrive as senderType "farmer").
+    socket.on("unread:update", ({ senderId }: { senderId: string; senderType: string }) => {
+      setSelectedFarmer((current) => {
+        if (current?.farmerId === senderId) return current;
+        setUnreadCounts((prev) => ({ ...prev, [senderId]: (prev[senderId] || 0) + 1 }));
+        return current;
+      });
+    });
+
     return () => {
       socket.off("receive_message");
+      socket.off("unread:update");
     };
   }, []);
 
@@ -111,7 +127,6 @@ export default function CompanyMessages() {
     const fetchFarmers = async () => {
       try {
         const res = await axios.get("http://localhost:8000/api/farmers");
-
         if (res.data.success) {
           setFarmers(res.data.farmers);
           setFilteredFarmers(res.data.farmers);
@@ -129,7 +144,6 @@ export default function CompanyMessages() {
     fetchFarmers();
   }, []);
 
-  /* ---------------- AUTO-SELECT FARMER FROM "View Farmer" REDIRECT ---------------- */
   useEffect(() => {
     const farmerIdFromUrl = searchParams.get("farmerId");
     if (!farmerIdFromUrl || farmers.length === 0) return;
@@ -138,20 +152,16 @@ export default function CompanyMessages() {
     if (match) setSelectedFarmer(match);
   }, [searchParams, farmers]);
 
-  /* ---------------- CROP SEARCH FILTER ---------------- */
   useEffect(() => {
     if (!search.trim()) {
       setFilteredFarmers(farmers);
       return;
     }
     const q = search.toLowerCase();
-    const matched = farmers.filter((f) =>
-      getFarmerCrops(f).some((c) => c.cropName.toLowerCase().includes(q))
-    );
+    const matched = farmers.filter((f) => getFarmerCrops(f).some((c) => c.cropName.toLowerCase().includes(q)));
     setFilteredFarmers(matched);
   }, [search, farmers]);
 
-  /* ---------------- FETCH CHAT HISTORY (authenticated) ---------------- */
   useEffect(() => {
     if (!selectedFarmer || !companyId) return;
 
@@ -167,6 +177,7 @@ export default function CompanyMessages() {
 
         if (res.data.success) {
           setMessages(res.data.messages);
+          setUnreadCounts((prev) => ({ ...prev, [selectedFarmer.farmerId]: 0 }));
         } else {
           setMessages([]);
         }
@@ -179,12 +190,10 @@ export default function CompanyMessages() {
     fetchMessages();
   }, [selectedFarmer, companyId]);
 
-  /* ---------------- AUTO-SCROLL TO LATEST MESSAGE ---------------- */
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  /* ---------------- SEND MESSAGE (real-time via socket) ---------------- */
   const sendMessage = () => {
     if (!input.trim() || !selectedFarmer || !companyId) return;
 
@@ -198,11 +207,7 @@ export default function CompanyMessages() {
 
     socket.emit(
       "send_message",
-      {
-        receiverId: selectedFarmer.farmerId,
-        receiverType: "farmer",
-        text,
-      },
+      { receiverId: selectedFarmer.farmerId, receiverType: "farmer", text },
       (ack: { success: boolean; error?: string }) => {
         if (!ack?.success) {
           console.error("Message failed to send:", ack?.error);
@@ -212,7 +217,6 @@ export default function CompanyMessages() {
     );
   };
 
-  /* ---------------- OPEN ORDER MODAL ---------------- */
   const openOrderModal = () => {
     if (!selectedFarmer) return;
     const crops = getFarmerCrops(selectedFarmer);
@@ -224,7 +228,6 @@ export default function CompanyMessages() {
     setOrderModalOpen(true);
   };
 
-  /* ---------------- SUBMIT ORDER ---------------- */
   const submitOrder = async () => {
     if (!selectedFarmer) return;
 
@@ -260,7 +263,9 @@ export default function CompanyMessages() {
       );
 
       if (res.data.success) {
-        setOrderStatus({ type: "success", text: "✅ Order confirmed and logged on-chain!" });
+        // Order is created and awaiting payment — NOT yet confirmed
+        // on-chain. That happens after payment + fraud approval.
+        setOrderStatus({ type: "success", text: "✅ Order sent to farmer — awaiting payment." });
         setTimeout(() => setOrderModalOpen(false), 1800);
       } else {
         setOrderStatus({ type: "error", text: res.data.error || "Order could not be placed." });
@@ -277,23 +282,17 @@ export default function CompanyMessages() {
     }
   };
 
-  /* ---------------- NOT LOGGED IN ---------------- */
   if (!companyId) {
     return (
       <div className="flex h-[calc(100vh-80px)] items-center justify-center">
-        <p className="text-gray-500">
-          Please log in as a company to view messages.
-        </p>
+        <p className="text-gray-500">Please log in as a company to view messages.</p>
       </div>
     );
   }
 
   return (
     <div className="flex h-[calc(100vh-80px)] rounded-3xl overflow-hidden shadow-2xl border bg-gradient-to-br from-green-50 via-white to-emerald-100">
-
-      {/* ---------------- LEFT PANEL ---------------- */}
       <div className="w-1/4 backdrop-blur-lg bg-white/60 border-r flex flex-col">
-
         <div className="p-4 border-b">
           <div className="flex items-center bg-white/80 px-3 py-2 rounded-xl border shadow-sm focus-within:ring-2 focus-within:ring-green-400 transition">
             <Search size={16} className="text-gray-400" />
@@ -308,20 +307,17 @@ export default function CompanyMessages() {
 
         <div className="flex-1 overflow-y-auto">
           {filteredFarmers.length === 0 && (
-            <p className="text-center text-gray-400 text-sm mt-6">
-              No farmers found 🌱
-            </p>
+            <p className="text-center text-gray-400 text-sm mt-6">No farmers found 🌱</p>
           )}
 
           {filteredFarmers.map((f) => {
             const crops = getFarmerCrops(f);
             const query = search.trim().toLowerCase();
-            const matchedCrop =
-              (query && crops.find((c) => c.cropName.toLowerCase().includes(query))) ||
-              crops[0];
+            const matchedCrop = (query && crops.find((c) => c.cropName.toLowerCase().includes(query))) || crops[0];
             const otherCount = crops.length - (matchedCrop ? 1 : 0);
             const isExpanded = expandedFarmerId === f.farmerId;
             const icon = getCropIcon(matchedCrop?.cropName || "");
+            const unread = unreadCounts[f.farmerId] || 0;
 
             return (
               <div key={f.farmerId} className="border-b">
@@ -337,7 +333,9 @@ export default function CompanyMessages() {
                     {icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-gray-800 truncate">{f.name}</p>
+                    <p className={`text-sm truncate ${unread > 0 ? "font-bold text-gray-900" : "font-semibold text-gray-800"}`}>
+                      {f.name}
+                    </p>
                     <p className="text-xs text-gray-500 truncate">
                       {matchedCrop?.cropName || "No crop info"}
                       {otherCount > 0 && (
@@ -352,10 +350,14 @@ export default function CompanyMessages() {
                         </button>
                       )}
                     </p>
-                    {f.address && (
-                      <p className="text-[11px] text-gray-400 truncate">📍 {f.address}</p>
-                    )}
+                    {f.address && <p className="text-[11px] text-gray-400 truncate">📍 {f.address}</p>}
                   </div>
+
+                  {unread > 0 && (
+                    <span className="shrink-0 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-500 px-1.5 text-[11px] font-bold text-white">
+                      {unread > 9 ? "9+" : unread}
+                    </span>
+                  )}
                 </div>
 
                 {isExpanded && (
@@ -375,45 +377,25 @@ export default function CompanyMessages() {
         </div>
       </div>
 
-      {/* ---------------- CHAT PANEL ---------------- */}
       <div className="flex-1 flex flex-col backdrop-blur-lg bg-white/40">
-
         <div className="p-4 border-b bg-white/60 backdrop-blur-md">
-          <p className="font-semibold text-gray-800">
-            {selectedFarmer?.name || "Select a farmer"}
-          </p>
-          <p className="text-xs text-gray-500">
-            {selectedFarmer?.address || ""}
-          </p>
+          <p className="font-semibold text-gray-800">{selectedFarmer?.name || "Select a farmer"}</p>
+          <p className="text-xs text-gray-500">{selectedFarmer?.address || ""}</p>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
-
-          {!selectedFarmer && (
-            <p className="text-center text-gray-400 mt-10">
-              Select a farmer to start chatting 👨‍🌾
-            </p>
-          )}
-
+          {!selectedFarmer && <p className="text-center text-gray-400 mt-10">Select a farmer to start chatting 👨‍🌾</p>}
           {selectedFarmer && messages.length === 0 && (
-            <p className="text-center text-gray-400 text-sm">
-              No messages yet. Start conversation 👋
-            </p>
+            <p className="text-center text-gray-400 text-sm">No messages yet. Start conversation 👋</p>
           )}
 
           {messages.map((msg, i) => {
             const isMe = msg.senderId === companyId;
-
             return (
-              <div
-                key={i}
-                className={`flex ${isMe ? "justify-end" : "justify-start"}`}
-              >
+              <div key={i} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`px-4 py-2 rounded-2xl text-sm max-w-xs shadow-md transition ${
-                    isMe
-                      ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white"
-                      : "bg-white text-gray-800 border"
+                  className={`px-4 py-2 rounded-2xl text-sm max-w-xs shadow-md transition whitespace-pre-line ${
+                    isMe ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white" : "bg-white text-gray-800 border"
                   }`}
                 >
                   {msg.text}
@@ -429,7 +411,7 @@ export default function CompanyMessages() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type a message..."
+              placeholder="Type a message... (try /report)"
               className="flex-1 border rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-green-400 bg-white/80"
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             />
@@ -443,45 +425,30 @@ export default function CompanyMessages() {
         )}
       </div>
 
-      {/* ---------------- RIGHT PANEL ---------------- */}
       {selectedFarmer && (
         <div className="w-1/4 border-l backdrop-blur-lg bg-white/60 p-6 hidden lg:block">
-
-          <h3 className="font-semibold mb-4 text-gray-800">
-            🌾 Farmer Details
-          </h3>
+          <h3 className="font-semibold mb-4 text-gray-800">🌾 Farmer Details</h3>
 
           <div className="space-y-3 text-sm">
             <p>
-              <span className="text-gray-500">Name:</span>{" "}
-              <span className="font-medium">{selectedFarmer.name}</span>
+              <span className="text-gray-500">Name:</span> <span className="font-medium">{selectedFarmer.name}</span>
             </p>
-
             <p>
-              <span className="text-gray-500">Location:</span>{" "}
-              {selectedFarmer.address || "—"}
+              <span className="text-gray-500">Location:</span> {selectedFarmer.address || "—"}
             </p>
-
             <div className="space-y-1">
               <span className="text-gray-500">Crops:</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {getFarmerCrops(selectedFarmer).map((c, i) => (
-                  <span
-                    key={c.cropId ?? i}
-                    className="text-xs bg-green-50 border border-green-200 rounded-full px-2 py-0.5 flex items-center gap-1"
-                  >
+                  <span key={c.cropId ?? i} className="text-xs bg-green-50 border border-green-200 rounded-full px-2 py-0.5 flex items-center gap-1">
                     {getCropIcon(c.cropName)} {c.cropName}
                   </span>
                 ))}
-                {getFarmerCrops(selectedFarmer).length === 0 && (
-                  <span className="text-xs text-gray-400">—</span>
-                )}
+                {getFarmerCrops(selectedFarmer).length === 0 && <span className="text-xs text-gray-400">—</span>}
               </div>
             </div>
-
             <p className="truncate">
-              <span className="text-gray-500">Wallet:</span>{" "}
-              {selectedFarmer.walletAddress || "—"}
+              <span className="text-gray-500">Wallet:</span> {selectedFarmer.walletAddress || "—"}
             </p>
           </div>
 
@@ -494,14 +461,10 @@ export default function CompanyMessages() {
         </div>
       )}
 
-      {/* ---------------- PLACE ORDER MODAL ---------------- */}
       {orderModalOpen && selectedFarmer && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000] p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 relative">
-            <button
-              onClick={() => setOrderModalOpen(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-            >
+            <button onClick={() => setOrderModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
               <X size={18} />
             </button>
 
@@ -511,11 +474,7 @@ export default function CompanyMessages() {
             <div className="space-y-3">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Crop</label>
-                <select
-                  value={orderCropId}
-                  onChange={(e) => setOrderCropId(e.target.value)}
-                  className="border p-2 w-full rounded text-sm"
-                >
+                <select value={orderCropId} onChange={(e) => setOrderCropId(e.target.value)} className="border p-2 w-full rounded text-sm">
                   {getFarmerCrops(selectedFarmer).map((c, i) => (
                     <option key={c.cropId ?? i} value={c.cropId}>
                       {getCropIcon(c.cropName)} {c.cropName}
@@ -526,26 +485,12 @@ export default function CompanyMessages() {
 
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Quantity</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={orderQuantity}
-                  onChange={(e) => setOrderQuantity(e.target.value)}
-                  className="border p-2 w-full rounded text-sm"
-                  placeholder="e.g. 50"
-                />
+                <input type="number" min={1} value={orderQuantity} onChange={(e) => setOrderQuantity(e.target.value)} className="border p-2 w-full rounded text-sm" placeholder="e.g. 50" />
               </div>
 
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Amount (₹)</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={orderAmount}
-                  onChange={(e) => setOrderAmount(e.target.value)}
-                  className="border p-2 w-full rounded text-sm"
-                  placeholder="e.g. 5000"
-                />
+                <input type="number" min={1} value={orderAmount} onChange={(e) => setOrderAmount(e.target.value)} className="border p-2 w-full rounded text-sm" placeholder="e.g. 5000" />
               </div>
 
               <div>
@@ -561,16 +506,10 @@ export default function CompanyMessages() {
               </div>
 
               {orderStatus && (
-                <p className={`text-xs ${orderStatus.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                  {orderStatus.text}
-                </p>
+                <p className={`text-xs ${orderStatus.type === "success" ? "text-green-600" : "text-red-600"}`}>{orderStatus.text}</p>
               )}
 
-              <button
-                onClick={submitOrder}
-                disabled={orderSubmitting}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50"
-              >
+              <button onClick={submitOrder} disabled={orderSubmitting} className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50">
                 {orderSubmitting ? "Placing order..." : "Confirm Order"}
               </button>
             </div>
