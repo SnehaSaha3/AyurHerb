@@ -1,12 +1,12 @@
 import { Router, Response } from "express";
 import { companyAuthMiddleware } from "../middlewares/companyAuthMiddleware";
 import axios from "axios";
-import Order from "../models/order"
+import Order from "../models/order";
 import Farmer from "../models/farmer";
 import Company from "../models/company";
-import { logConfirmedOrderOnChain } from "../controllers/orderController"
+import Message from "../models/message";
+import { emitToUser } from "../socket";
 import { createPaymentOrder, verifyPayment } from "../controllers/paymentController";
- 
 
 const router = Router();
 const AGENTS_URL = process.env.AGENTS_URL || "http://localhost:8001";
@@ -45,40 +45,33 @@ router.get(
           (o: any) => o.status === "delivery_released"
         ).length,
 
-        totalSpend: orders.reduce(
-          (total: number, o: any) => {
-            if (
-              [
-                "escrow_funded",
-                "shipment_released",
-                "delivery_released",
-              ].includes(o.status)
-            ) {
-              return total + (o.fees?.grandTotal || o.amount || 0);
-            }
-
-            return total;
-          },
-          0
-        ),
+        totalSpend: orders.reduce((total: number, o: any) => {
+          if (
+            ["escrow_funded", "shipment_released", "delivery_released"].includes(
+              o.status
+            )
+          ) {
+            return total + (o.fees?.grandTotal || o.amount || 0);
+          }
+          return total;
+        }, 0),
       };
 
-      return res.json({
-        success: true,
-        orders,
-        stats,
-      });
+      return res.json({ success: true, orders, stats });
     } catch (err: any) {
       console.error("Company orders error:", err);
-
-      return res.status(500).json({
-        success: false,
-        error: "Failed to fetch company orders",
-      });
+      return res.status(500).json({ success: false, error: "Failed to fetch company orders" });
     }
   }
 );
 
+/**
+ * Creates the order, runs the verification + stock-check agents, and
+ * stops at `awaiting_payment`. Deliberately does NOT touch the
+ * blockchain — a fake order costs nothing to create, so nothing gets
+ * written to the immutable ledger until real money has moved and the
+ * fraud agent has cleared it. That happens in paymentController.verifyPayment.
+ */
 router.post("/create", companyAuthMiddleware, async (req: any, res: Response) => {
   try {
     const { farmerId, cropId, cropName, quantity, amount, gstNumber } = req.body;
@@ -143,22 +136,27 @@ router.post("/create", companyAuthMiddleware, async (req: any, res: Response) =>
       return res.status(409).json({ success: false, order, error: stockRes.data.reason });
     }
 
-    // Both checks passed — order is genuinely confirmed. This is the
-    // ONLY point that touches the blockchain, and it happens exactly once.
+    // Both checks passed — order is payable, but NOT confirmed on-chain yet.
     order.status = "awaiting_payment";
     await order.save();
 
-    const { txHash } = await logConfirmedOrderOnChain({
-      orderId: order.id,
-      companyAddr: company.walletAddress,
-      farmerAddr: farmer.walletAddress,
-      cropName,
-      quantity,
-      amount,
+    // Notify the farmer — real chat message, not just a socket toast, so
+    // it persists in their inbox.
+    const notifyText =
+      `New order request: ${quantity} kg of ${cropName} ` +
+      `(₹${amount.toLocaleString("en-IN")}) from ${company.name}. ` +
+      `Awaiting payment — this is not yet confirmed on-chain.`;
+
+    const notifyMessage = await Message.create({
+      senderId: req.user.companyId,
+      senderType: "company",
+      receiverId: farmerId,
+      receiverType: "farmer",
+      text: notifyText,
     });
 
-    order.chainTxHash = txHash;
-    await order.save();
+    emitToUser(farmerId, "farmer", "receive_message", notifyMessage);
+    emitToUser(req.user.companyId, "company", "receive_message", notifyMessage);
 
     res.json({ success: true, order });
   } catch (err: any) {
@@ -166,7 +164,6 @@ router.post("/create", companyAuthMiddleware, async (req: any, res: Response) =>
     res.status(500).json({ success: false, error: err.message || "Server error" });
   }
 });
-
 
 router.post("/:orderId/create-payment", companyAuthMiddleware, createPaymentOrder);
 router.post("/:orderId/verify-payment", companyAuthMiddleware, verifyPayment);

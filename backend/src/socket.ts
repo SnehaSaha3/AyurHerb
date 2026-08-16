@@ -1,7 +1,9 @@
 import { Server as HTTPServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
+import axios from "axios";
 import Message from "./models/message";
+import Farmer from "./models/farmer";
 
 interface AuthedSocket extends Socket {
   userId?: string;
@@ -14,17 +16,9 @@ interface SendMessagePayload {
   text: string;
 }
 
-// Module-level reference so other files (paymentController,
-// adminController, etc.) can emit without needing the httpServer/io
-// wiring themselves — set once in initSocket(), read via emitToUser().
 let ioInstance: SocketIOServer | null = null;
+const AGENTS_URL = process.env.AGENTS_URL || "http://localhost:8001";
 
-/**
- * Attaches Socket.IO to the same HTTP server Express is running on.
- * Auth: client connects with `auth: { token }` — same JWT_SECRET / shape
- * used by authMiddleware and companyAuthMiddleware, so no separate login
- * is needed for sockets.
- */
 export function initSocket(httpServer: HTTPServer) {
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -65,6 +59,71 @@ export function initSocket(httpServer: HTTPServer) {
     const room = `${socket.userType}:${socket.userId}`;
     socket.join(room);
 
+    async function handleReportCommand(
+      receiverId: string,
+      receiverType: "farmer" | "company",
+      text: string,
+      ack?: (res: { success: boolean; message?: any; error?: string }) => void
+    ) {
+      try {
+        const farmerId = socket.userType === "farmer" ? socket.userId! : receiverId;
+        const companyId = socket.userType === "company" ? socket.userId! : receiverId;
+
+        const farmer = await Farmer.findById(farmerId);
+        if (!farmer) return ack?.({ success: false, error: "Farmer not found" });
+
+        const crops = farmer.crops || [];
+        if (crops.length === 0) {
+          return ack?.({ success: false, error: "No crops on file for this farmer yet" });
+        }
+
+        const cropQuery = text.slice("/report".length).trim().toLowerCase();
+        let crop =
+          cropQuery
+            ? crops.find((c: any) => c.cropName.toLowerCase() === cropQuery) ||
+              crops.find((c: any) => c.cropName.toLowerCase().includes(cropQuery))
+            : crops.length === 1
+            ? crops[0]
+            : undefined;
+
+        if (!crop) {
+          const names = crops.map((c: any) => c.cropName).join(", ");
+          return ack?.({
+            success: false,
+            error: `Specify a crop: "/report <cropName>". Available: ${names}`,
+          });
+        }
+
+        const reportRes = await axios.post(`${AGENTS_URL}/reports/generate-report`, {
+          farmerName: farmer.name,
+          cropName: crop.cropName,
+          soilType: crop.soilType || "Not specified",
+          season: crop.season || "Not specified",
+          quantity: crop.quantity,
+          location: farmer.address,
+        });
+
+        const reportText = `🌿 Crop Health Report — ${crop.cropName}\n\n${reportRes.data.report}`;
+
+        const message = await Message.create({
+          senderId: farmerId,
+          senderType: "farmer",
+          receiverId: companyId,
+          receiverType: "company",
+          text: reportText,
+        });
+
+        io.to(`farmer:${farmerId}`).emit("receive_message", message);
+        io.to(`company:${companyId}`).emit("receive_message", message);
+        io.to(`company:${companyId}`).emit("unread:update", { senderId: farmerId, senderType: "farmer" });
+
+        ack?.({ success: true, message });
+      } catch (err) {
+        console.error("report command error:", err);
+        ack?.({ success: false, error: "Failed to generate crop health report" });
+      }
+    }
+
     socket.on(
       "send_message",
       async (
@@ -78,20 +137,31 @@ export function initSocket(httpServer: HTTPServer) {
             return ack?.({ success: false, error: "Missing fields" });
           }
 
+          const trimmed = text.trim();
+
+          if (trimmed.toLowerCase().startsWith("/report")) {
+            return handleReportCommand(receiverId, receiverType, trimmed, ack);
+          }
+
           const message = await Message.create({
             senderId: socket.userId,
             senderType: socket.userType,
             receiverId,
             receiverType,
-            text: text.trim(),
+            text: trimmed,
           });
 
           const receiverRoom = `${receiverType}:${receiverId}`;
-
-          // deliver to the receiver, and echo back to the sender's own
-          // room so other open tabs/devices for the sender stay in sync
           io.to(receiverRoom).emit("receive_message", message);
           io.to(room).emit("receive_message", message);
+
+          // WhatsApp-style badge bump — receiver's sidebar increments
+          // live without a refetch. Sender doesn't get this (they don't
+          // need an unread badge for their own message).
+          io.to(receiverRoom).emit("unread:update", {
+            senderId: socket.userId,
+            senderType: socket.userType,
+          });
 
           ack?.({ success: true, message });
         } catch (err) {
@@ -101,26 +171,12 @@ export function initSocket(httpServer: HTTPServer) {
       }
     );
 
-    socket.on("disconnect", () => {
-    });
+    socket.on("disconnect", () => {});
   });
 
   return io;
 }
 
-/**
- * Fire-and-forget notification to one user's room — same
- * `${userType}:${userId}` room every connected socket already joins on
- * connect, so this reuses your existing room convention rather than
- * introducing a second one. Safe to call before a socket connects or
- * after it disconnects — .to(room).emit() on an empty room is a no-op,
- * not an error, so order/payment flows never need to check "is this
- * user online" before calling it.
- *
- * Not used for chat (send_message/receive_message keep their existing
- * client-driven flow) — this is for server-initiated events: payment
- * received, invoice ready, order held, etc.
- */
 export function emitToUser(
   userId: string,
   userType: "farmer" | "company",

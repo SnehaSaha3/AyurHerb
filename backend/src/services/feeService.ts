@@ -1,15 +1,3 @@
-/**
- * Server-side fee computation. NEVER accept fee amounts from the client —
- * always recompute here from the order's real crop subtotal + quantity,
- * or a company could tamper with what they're charged.
- *
- * Real GST treatment, not invented: raw agricultural produce sale is
- * GST-exempt in India. Platform service fee and transportation/logistics
- * are taxable SERVICES, so GST @ 18% applies to those two components
- * only — not to the crop value itself. That split is what makes this
- * invoice look like a real Indian B2B document instead of a flat
- * percentage markup.
- */
 
 export const PLATFORM_FEE_PERCENT = Number(process.env.PLATFORM_FEE_PERCENT ?? 5);
 export const TRANSPORT_FEE_PER_KG = Number(process.env.TRANSPORT_FEE_PER_KG ?? 2);

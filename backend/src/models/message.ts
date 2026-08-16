@@ -6,6 +6,7 @@ export interface IMessage extends Document {
   receiverId: string;
   receiverType: "farmer" | "company";
   text: string;
+  read: boolean;
   createdAt: Date;
 }
 
@@ -16,6 +17,7 @@ const messageSchema = new Schema<IMessage>(
     receiverId: { type: String, required: true },
     receiverType: { type: String, enum: ["farmer", "company"], required: true },
     text: { type: String, required: true },
+    read: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

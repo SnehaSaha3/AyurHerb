@@ -4,17 +4,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-/**
- * TEST MODE ONLY. Uses your Razorpay test key pair (rzp_test_...).
- * No real settlement happens — this is the actual Razorpay Checkout +
- * signature-verification flow, just running against Razorpay's test
- * environment. That distinction matters for your demo pitch: the
- * *integration* is real and production-shaped, only the money isn't.
- *
- * npm install razorpay
- * .env needs: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET  (test mode keys)
- */
-
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID as string,
   key_secret: process.env.RAZORPAY_KEY_SECRET as string,
