@@ -1,89 +1,44 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import DashboardLayout from "./DashboardLayout";
+import { useUnread } from "../../context/UnreadContext";
 
 function FarmerDashboard() {
   const [farmerName, setFarmerName] = useState("");
-  const [unreadMessages, setUnreadMessages] =
-    useState(0);
+  const { totalUnread } = useUnread();
 
   useEffect(() => {
     const fetchFarmer = async () => {
       try {
-        /*
-         * Use the same token everywhere.
-         *
-         * Your Messages component currently uses
-         * farmerToken, while this component was using
-         * token. That inconsistency can cause auth
-         * problems.
-         */
-        const token =
-          localStorage.getItem("farmerToken") ||
-          localStorage.getItem("token");
-
+        const token = localStorage.getItem("farmerToken") || localStorage.getItem("token");
         if (!token) {
-          console.error(
-            "No farmer token found."
-          );
+          console.error("No farmer token found.");
           return;
         }
 
-        const res = await axios.get(
-          "http://localhost:8000/api/farmers/me",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const res = await axios.get("http://localhost:8000/api/farmers/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         if (res.data?.farmer?.name) {
-          setFarmerName(
-            res.data.farmer.name
-          );
+          setFarmerName(res.data.farmer.name);
         } else {
-          console.error(
-            "Unexpected farmer response:",
-            res.data
-          );
+          console.error("Unexpected farmer response:", res.data);
         }
-
       } catch (error) {
-        console.error(
-          "Error fetching farmer:",
-          error
-        );
+        console.error("Error fetching farmer:", error);
       }
     };
 
     fetchFarmer();
   }, []);
 
-  /*
-   * Navigation for farmer workspace.
-   */
   const farmerLinks = [
-    {
-      name: "Home",
-      path: "/farmer-dashboard",
-    },
-    {
-      name: "My Crops",
-      path: "/farmer-dashboard/crops",
-    },
-    {
-      name: "Messages",
-      path: "/farmer-dashboard/messages",
-    },
-    {
-      name: "Geo Tagging",
-      path: "/farmer-dashboard/geotagged",
-    },
-    {
-      name: "Profile",
-      path: "/farmer-dashboard/profile",
-    },
+    { name: "Home", path: "/farmer-dashboard" },
+    { name: "My Crops", path: "/farmer-dashboard/crops" },
+    { name: "Messages", path: "/farmer-dashboard/messages" },
+    { name: "Geo Tagging", path: "/farmer-dashboard/geotagged" },
+    { name: "Profile", path: "/farmer-dashboard/profile" },
   ];
 
   return (
@@ -91,10 +46,9 @@ function FarmerDashboard() {
       userType="Farmer"
       links={farmerLinks}
       farmerName={farmerName}
-      unreadMessages={unreadMessages}
+      unreadMessages={totalUnread}
     />
   );
 }
 
 export default FarmerDashboard;
-
