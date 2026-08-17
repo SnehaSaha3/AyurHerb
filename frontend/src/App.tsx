@@ -42,6 +42,9 @@ function App() {
         <Route path="company-login" element={<LoginForm role="company" />} />
       </Route>
 
+     
+
+
       <Route path="/farmer-dashboard" element={<FarmerDashboard />}>
         <Route index element={<Home />} />
         <Route path="crops" element={<CropList />} />
