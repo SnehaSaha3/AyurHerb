@@ -1,171 +1,427 @@
-import { Router, Response } from "express";
-import { companyAuthMiddleware } from "../middlewares/companyAuthMiddleware";
+import {
+  Router,
+  Response,
+} from "express";
+
 import axios from "axios";
+
 import Order from "../models/order";
 import Farmer from "../models/farmer";
 import Company from "../models/company";
 import Message from "../models/message";
+
+import {
+  companyAuthMiddleware,
+} from "../middlewares/companyAuthMiddleware";
+
+import {
+  createPaymentOrder,
+  verifyPayment,
+} from "../controllers/paymentController";
+
 import { emitToUser } from "../socket";
-import { createPaymentOrder, verifyPayment } from "../controllers/paymentController";
 
 const router = Router();
-const AGENTS_URL = process.env.AGENTS_URL || "http://localhost:8001";
 
-/* -------------------- COMPANY ORDERS -------------------- */
+const AGENTS_URL =
+  process.env.AGENTS_URL ||
+  "http://localhost:8001";
+
+/* ============================================================
+   COMPANY ORDERS
+   GET /api/orders/company
+============================================================ */
+
 router.get(
   "/company",
   companyAuthMiddleware,
-  async (req: any, res: Response) => {
+  async (
+    req: any,
+    res: Response
+  ) => {
     try {
-      const orders = await Order.find({
-        companyId: req.user.companyId,
-      })
-        .populate("farmerId", "name address")
-        .sort({ createdAt: -1 })
-        .lean();
+      const orders =
+        await Order.find({
+          companyId:
+            req.user.companyId,
+        })
+          .populate(
+            "farmerId",
+            "name address walletAddress"
+          )
+          .sort({
+            createdAt: -1,
+          })
+          .lean();
 
       const stats = {
-        activeOrders: orders.filter(
-          (o: any) =>
-            !["delivery_released", "rejected"].includes(o.status)
-        ).length,
+        activeOrders:
+          orders.filter(
+            (order: any) =>
+              ![
+                "delivery_released",
+                "rejected",
+              ].includes(
+                order.status
+              )
+          ).length,
 
-        pendingOrders: orders.filter(
-          (o: any) =>
-            [
-              "pending_verification",
-              "pending_stock_check",
-              "awaiting_payment",
-              "payment_processing",
-              "pending_admin_review",
-            ].includes(o.status)
-        ).length,
+        pendingOrders:
+          orders.filter(
+            (order: any) =>
+              [
+                "pending_verification",
+                "pending_stock_check",
+                "awaiting_payment",
+                "payment_processing",
+                "pending_admin_review",
+              ].includes(
+                order.status
+              )
+          ).length,
 
-        deliveredOrders: orders.filter(
-          (o: any) => o.status === "delivery_released"
-        ).length,
+        deliveredOrders:
+          orders.filter(
+            (order: any) =>
+              order.status ===
+              "delivery_released"
+          ).length,
 
-        totalSpend: orders.reduce((total: number, o: any) => {
-          if (
-            ["escrow_funded", "shipment_released", "delivery_released"].includes(
-              o.status
-            )
-          ) {
-            return total + (o.fees?.grandTotal || o.amount || 0);
-          }
-          return total;
-        }, 0),
+        totalSpend:
+          orders.reduce(
+            (
+              total: number,
+              order: any
+            ) => {
+              if (
+                [
+                  "escrow_funded",
+                  "shipment_released",
+                  "delivery_released",
+                ].includes(
+                  order.status
+                )
+              ) {
+                return (
+                  total +
+                  (
+                    order.fees
+                      ?.grandTotal ||
+                    order.amount ||
+                    0
+                  )
+                );
+              }
+
+              return total;
+            },
+            0
+          ),
       };
 
-      return res.json({ success: true, orders, stats });
-    } catch (err: any) {
-      console.error("Company orders error:", err);
-      return res.status(500).json({ success: false, error: "Failed to fetch company orders" });
+      return res.json({
+        success: true,
+        orders,
+        stats,
+      });
+    } catch (error) {
+      console.error(
+        "Company orders error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        error:
+          "Failed to fetch company orders",
+      });
     }
   }
 );
 
-/**
- * Creates the order, runs the verification + stock-check agents, and
- * stops at `awaiting_payment`. Deliberately does NOT touch the
- * blockchain — a fake order costs nothing to create, so nothing gets
- * written to the immutable ledger until real money has moved and the
- * fraud agent has cleared it. That happens in paymentController.verifyPayment.
- */
-router.post("/create", companyAuthMiddleware, async (req: any, res: Response) => {
-  try {
-    const { farmerId, cropId, cropName, quantity, amount, gstNumber } = req.body;
+/* ============================================================
+   CREATE ORDER
+   POST /api/orders/create
+============================================================ */
 
-    if (!farmerId || !cropId || !quantity || !amount || !gstNumber) {
-      return res.status(400).json({ error: "Missing required order fields" });
-    }
+router.post(
+  "/create",
+  companyAuthMiddleware,
+  async (
+    req: any,
+    res: Response
+  ) => {
+    try {
+      const {
+        farmerId,
+        cropId,
+        cropName,
+        quantity,
+        amount,
+        gstNumber,
+      } = req.body;
 
-    const [company, farmer] = await Promise.all([
-      Company.findById(req.user.companyId),
-      Farmer.findById(farmerId),
-    ]);
+      if (
+        !farmerId ||
+        !cropId ||
+        !cropName ||
+        !quantity ||
+        !amount ||
+        !gstNumber
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Missing required order fields",
+        });
+      }
 
-    if (!company?.walletAddress) {
-      return res.status(400).json({ error: "Connect a wallet before placing orders" });
-    }
-    if (!farmer?.walletAddress) {
-      return res.status(404).json({ error: "Farmer not found or has no wallet on file" });
-    }
+      const [
+        company,
+        farmer,
+      ] = await Promise.all([
+        Company.findById(
+          req.user.companyId
+        ),
 
-    const order = new Order({
-      companyId: req.user.companyId,
-      farmerId,
-      cropId,
-      cropName,
-      quantity,
-      amount,
-      status: "pending_verification",
-    });
+        Farmer.findById(
+          farmerId
+        ),
+      ]);
 
-    // Agent 1 — identity verification (Mongo only, no chain write)
-    const verifyRes = await axios.post(`${AGENTS_URL}/verify-company`, { gstNumber });
-    order.verification = {
-      passed: verifyRes.data.passed,
-      gstNumber,
-      checkedAt: new Date(),
-      reason: verifyRes.data.reason,
-    };
+      if (!company) {
+        return res.status(404).json({
+          success: false,
+          error: "Company not found",
+        });
+      }
 
-    if (!verifyRes.data.passed) {
-      order.status = "verification_failed";
+      if (
+        !company.walletAddress
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Connect a wallet before placing orders",
+        });
+      }
+
+      if (!farmer) {
+        return res.status(404).json({
+          success: false,
+          error:
+            "Farmer not found",
+        });
+      }
+
+      if (
+        !farmer.walletAddress
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Farmer has no wallet on file",
+        });
+      }
+
+      const order =
+        new Order({
+          companyId:
+            req.user.companyId,
+
+          farmerId,
+
+          cropId,
+
+          cropName,
+
+          quantity,
+
+          amount,
+
+          status:
+            "pending_verification",
+        });
+
+      /*
+       * Company verification agent.
+       */
+      const verifyRes =
+        await axios.post(
+          `${AGENTS_URL}/verify-company`,
+          {
+            gstNumber,
+          }
+        );
+
+      order.verification = {
+        passed:
+          verifyRes.data.passed,
+
+        gstNumber,
+
+        checkedAt:
+          new Date(),
+
+        reason:
+          verifyRes.data.reason,
+      };
+
+      if (
+        !verifyRes.data.passed
+      ) {
+        order.status =
+          "verification_failed";
+
+        await order.save();
+
+        return res.status(403).json({
+          success: false,
+          order,
+          error:
+            verifyRes.data.reason,
+        });
+      }
+
+      /*
+       * Stock check.
+       */
+      order.status =
+        "pending_stock_check";
+
+      const crop =
+        farmer.crops?.find(
+          (c: any) =>
+            c.cropId?.toString() ===
+            cropId.toString()
+        );
+
+      const stockRes =
+        await axios.post(
+          `${AGENTS_URL}/check-stock`,
+          {
+            availableQuantity:
+              crop?.quantity ?? 0,
+
+            requestedQuantity:
+              quantity,
+          }
+        );
+
+      order.stockCheck = {
+        passed:
+          stockRes.data.passed,
+
+        checkedAt:
+          new Date(),
+
+        reason:
+          stockRes.data.reason,
+      };
+
+      if (
+        !stockRes.data.passed
+      ) {
+        order.status =
+          "insufficient_stock";
+
+        await order.save();
+
+        return res.status(409).json({
+          success: false,
+          order,
+          error:
+            stockRes.data.reason,
+        });
+      }
+
+      /*
+       * Payable.
+       */
+      order.status =
+        "awaiting_payment";
+
       await order.save();
-      return res.status(403).json({ success: false, order, error: verifyRes.data.reason });
+
+      /*
+       * Notify farmer.
+       */
+      const notifyText =
+        `New order request: ${quantity} kg of ${cropName} ` +
+        `(₹${Number(
+          amount
+        ).toLocaleString("en-IN")}) from ${company.name}. ` +
+        `Awaiting payment — this is not yet confirmed on-chain.`;
+
+      const notifyMessage =
+        await Message.create({
+          senderId:
+            req.user.companyId,
+
+          senderType:
+            "company",
+
+          receiverId:
+            farmerId,
+
+          receiverType:
+            "farmer",
+
+          text:
+            notifyText,
+
+          orderId:
+            order._id,
+        });
+
+      emitToUser(
+        farmerId,
+        "farmer",
+        "receive_message",
+        notifyMessage
+      );
+
+      emitToUser(
+        req.user.companyId,
+        "company",
+        "receive_message",
+        notifyMessage
+      );
+
+      return res.json({
+        success: true,
+        order,
+      });
+    } catch (error: any) {
+      console.error(
+        "Order creation error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        error:
+          error.message ||
+          "Server error",
+      });
     }
-
-    // Agent 2 — stock check (Mongo only, no chain write)
-    order.status = "pending_stock_check";
-    const crop = farmer.crops?.find((c: any) => c.cropId === cropId);
-    const stockRes = await axios.post(`${AGENTS_URL}/check-stock`, {
-      availableQuantity: crop?.quantity ?? 0,
-      requestedQuantity: quantity,
-    });
-    order.stockCheck = {
-      passed: stockRes.data.passed,
-      checkedAt: new Date(),
-      reason: stockRes.data.reason,
-    };
-
-    if (!stockRes.data.passed) {
-      order.status = "insufficient_stock";
-      await order.save();
-      return res.status(409).json({ success: false, order, error: stockRes.data.reason });
-    }
-
-    // Both checks passed — order is payable, but NOT confirmed on-chain yet.
-    order.status = "awaiting_payment";
-    await order.save();
-
-    // Notify the farmer — real chat message, not just a socket toast, so
-    // it persists in their inbox.
-    const notifyText =
-      `New order request: ${quantity} kg of ${cropName} ` +
-      `(₹${amount.toLocaleString("en-IN")}) from ${company.name}. ` +
-      `Awaiting payment — this is not yet confirmed on-chain.`;
-
-    const notifyMessage = await Message.create({
-      senderId: req.user.companyId,
-      senderType: "company",
-      receiverId: farmerId,
-      receiverType: "farmer",
-      text: notifyText,
-    });
-
-    emitToUser(farmerId, "farmer", "receive_message", notifyMessage);
-    emitToUser(req.user.companyId, "company", "receive_message", notifyMessage);
-
-    res.json({ success: true, order });
-  } catch (err: any) {
-    console.error("Order creation error:", err);
-    res.status(500).json({ success: false, error: err.message || "Server error" });
   }
-});
+);
 
-router.post("/:orderId/create-payment", companyAuthMiddleware, createPaymentOrder);
-router.post("/:orderId/verify-payment", companyAuthMiddleware, verifyPayment);
+/* ============================================================
+   PAYMENT ROUTES
+============================================================ */
+
+router.post(
+  "/:orderId/create-payment",
+  companyAuthMiddleware,
+  createPaymentOrder
+);
+
+router.post(
+  "/:orderId/verify-payment",
+  companyAuthMiddleware,
+  verifyPayment
+);
 
 export default router;

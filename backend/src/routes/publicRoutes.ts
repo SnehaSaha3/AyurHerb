@@ -3,6 +3,7 @@ import Order from "../models/order";
 
 const router = Router();
 
+
 router.get(
   "/verify/:orderId/:qrToken",
   async (req: any, res: Response) => {
@@ -11,11 +12,12 @@ router.get(
 
       const order = await Order.findById(orderId)
         .populate("companyId", "name")
-        .populate("farmerId", "name location")
+        .populate("farmerId", "name address location")
         .lean();
 
       if (!order) {
         return res.status(404).json({
+          success: false,
           error: "Invalid or expired verification link",
         });
       }
@@ -24,24 +26,13 @@ router.get(
 
       if (!invoice || invoice.qrToken !== qrToken) {
         return res.status(404).json({
+          success: false,
           error: "Invalid or expired verification link",
         });
       }
 
-      /*
-       * Mongoose knows these are populated at runtime,
-       * but TypeScript still sees them as ObjectId.
-       */
-      const company = order.companyId as unknown as {
-        _id: string;
-        name: string;
-      };
-
-      const farmer = order.farmerId as unknown as {
-        _id: string;
-        name: string;
-        location?: unknown;
-      };
+      const company = order.companyId as any;
+      const farmer = order.farmerId as any;
 
       return res.json({
         success: true,
@@ -53,16 +44,30 @@ router.get(
         crop: {
           name: order.cropName,
           quantity: order.quantity,
+          amount: order.amount,
         },
 
-        buyer: company?.name,
+        buyer: {
+          name: company?.name || "Unknown buyer",
+        },
 
         seller: {
-          name: farmer?.name,
-          location: farmer?.location,
+          name: farmer?.name || "Unknown farmer",
+          address: farmer?.address || null,
+          location: farmer?.location || null,
         },
 
         status: order.status,
+
+        invoice: {
+          invoiceNumber: invoice.invoiceNumber,
+          generatedAt: invoice.generatedAt,
+
+          // IMPORTANT:
+          // This is the exact PDF endpoint.
+          pdfUrl:
+            `/api/public/verify/${order._id}/${invoice.qrToken}/pdf`,
+        },
 
         chainProof: {
           orderConfirmedTxHash: order.chainTxHash,
@@ -70,25 +75,41 @@ router.get(
           escrowFundedTxHash:
             order.escrow?.escrowChainTxHash,
 
-          tranches: order.tranches?.map((t: any) => ({
-            type: t.type,
-            status: t.status,
-            chainTxHash: t.chainTxHash,
-          })),
+          tranches:
+            order.tranches?.map((t: any) => ({
+              type: t.type,
+              percent: t.percent,
+              amount: t.amount,
+              status: t.status,
+              chainTxHash: t.chainTxHash,
+              releasedAt: t.releasedAt,
+            })) || [],
         },
       });
     } catch (err: any) {
-      console.error("public verify error:", err);
+      console.error("Public verification error:", err);
 
       return res.status(500).json({
+        success: false,
         error: "Server error",
       });
     }
   }
 );
 
+
 /**
- * GET /public/verify/:orderId/:qrToken/pdf
+ * GET
+ *
+ * /api/public/verify/:orderId/:qrToken/pdf
+ *
+ * THIS IS YOUR INVOICE PDF ROUTE.
+ *
+ * Example:
+ * http://localhost:8000/api/public/verify/
+ * 6a808ffebadd39d59c25af1d/
+ * 9bc52d9ec2b4e66d7a9218e4e9e7f632/
+ * pdf
  */
 router.get(
   "/verify/:orderId/:qrToken/pdf",
@@ -100,6 +121,7 @@ router.get(
 
       if (!order) {
         return res.status(404).json({
+          success: false,
           error: "Invalid or expired verification link",
         });
       }
@@ -108,12 +130,14 @@ router.get(
 
       if (!invoice || invoice.qrToken !== qrToken) {
         return res.status(404).json({
+          success: false,
           error: "Invalid or expired verification link",
         });
       }
 
       if (!invoice.invoicePdfBase64) {
         return res.status(404).json({
+          success: false,
           error: "Invoice PDF is not available",
         });
       }
@@ -133,11 +157,18 @@ router.get(
         `inline; filename="${invoice.invoiceNumber}.pdf"`
       );
 
+      res.setHeader(
+        "Content-Length",
+        pdfBuffer.length
+      );
+
       return res.send(pdfBuffer);
+
     } catch (err: any) {
-      console.error("public verify pdf error:", err);
+      console.error("Public invoice PDF error:", err);
 
       return res.status(500).json({
+        success: false,
         error: "Server error",
       });
     }
