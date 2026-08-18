@@ -5,14 +5,19 @@ export default function FarmerGreeting() {
 
   useEffect(() => {
     const hour = new Date().getHours();
-    if (hour < 12) setGreeting("Good Morning");
-    else if (hour < 18) setGreeting("Good Afternoon");
-    else setGreeting("Good Evening");
+
+    if (hour < 12) {
+      setGreeting("Good Morning");
+    } else if (hour < 18) {
+      setGreeting("Good Afternoon");
+    } else {
+      setGreeting("Good Evening");
+    }
   }, []);
 
   return (
-    <h1 className="text-lg font-medium text-gray-700 mb-4">
+    <p className="text-sm font-medium text-gray-500">
       {greeting} 👩‍🌾
-    </h1>
+    </p>
   );
 }

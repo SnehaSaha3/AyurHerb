@@ -1,24 +1,32 @@
 import {
+  BarChart3,
   Bell,
-  ChevronDown,
   Home as HomeIcon,
   Leaf,
   LogOut,
   MapPin,
   MessageCircle,
   User,
+  Sparkles,
 } from "lucide-react";
+
 import {
   NavLink,
   Outlet,
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import type { JSX } from "react";
+
+import type { ReactNode } from "react";
+
+type DashboardLink = {
+  name: string;
+  path: string;
+};
 
 type DashboardProps = {
   userType: string;
-  links: { name: string; path: string }[];
+  links: DashboardLink[];
   farmerName?: string;
   unreadMessages?: number;
 };
@@ -32,9 +40,11 @@ export default function DashboardLayout({
   const location = useLocation();
   const navigate = useNavigate();
 
-  const iconMap: Record<string, JSX.Element> = {
+  const iconMap: Record<string, ReactNode> = {
     Home: <HomeIcon size={18} strokeWidth={1.8} />,
     "My Crops": <Leaf size={18} strokeWidth={1.8} />,
+    Analytics: <BarChart3 size={18} strokeWidth={1.8} />,
+    Recommendations: <Sparkles size={18} strokeWidth={1.8} />,
     "Geo Tagging": <MapPin size={18} strokeWidth={1.8} />,
     Messages: <MessageCircle size={18} strokeWidth={1.8} />,
     Profile: <User size={18} strokeWidth={1.8} />,
@@ -42,7 +52,8 @@ export default function DashboardLayout({
 
   const initials = farmerName
     ? farmerName
-        .split(" ")
+        .trim()
+        .split(/\s+/)
         .map((word) => word[0])
         .join("")
         .slice(0, 2)
@@ -55,69 +66,66 @@ export default function DashboardLayout({
     navigate("/login");
   };
 
+  const pageTitle = getPageTitle(location.pathname);
+
   return (
-    <div className="relative h-screen overflow-hidden bg-[#f4f8f3] text-gray-900">
+    <div className="min-h-screen bg-[#f5f8f4] text-gray-900">
 
       {/* =====================================================
-          SOFT BACKGROUND / ANTI-GRAVITY EFFECT
+          BACKGROUND ATMOSPHERE
       ===================================================== */}
 
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+      >
         <div
           className="
             absolute
-            -left-24
-            -top-24
-            h-72
-            w-72
+            -left-32
+            -top-32
+            h-[420px]
+            w-[420px]
             rounded-full
-            bg-green-300/20
-            blur-3xl
-            animate-[pulse_7s_ease-in-out_infinite]
+            bg-emerald-300/15
+            blur-[110px]
           "
         />
 
         <div
           className="
             absolute
-            right-[-80px]
-            top-[18%]
-            h-80
-            w-80
+            right-[-180px]
+            top-[12%]
+            h-[500px]
+            w-[500px]
             rounded-full
-            bg-emerald-200/20
-            blur-3xl
-            animate-[pulse_9s_ease-in-out_infinite]
+            bg-green-200/20
+            blur-[120px]
           "
         />
 
         <div
           className="
             absolute
-            bottom-[-120px]
-            left-[35%]
-            h-72
-            w-72
+            bottom-[-220px]
+            left-[30%]
+            h-[500px]
+            w-[500px]
             rounded-full
             bg-lime-200/15
-            blur-3xl
-            animate-[pulse_8s_ease-in-out_infinite]
+            blur-[120px]
           "
         />
-
-        {/* tiny floating particles */}
-        <span className="absolute left-[30%] top-[18%] h-1.5 w-1.5 rounded-full bg-green-400/30 animate-bounce" />
-        <span className="absolute left-[72%] top-[32%] h-1 w-1 rounded-full bg-emerald-500/30 animate-pulse" />
-        <span className="absolute left-[55%] bottom-[18%] h-1.5 w-1.5 rounded-full bg-green-500/20 animate-bounce" />
-
       </div>
 
+
       {/* =====================================================
-          APP SHELL
+          DESKTOP APP SHELL
       ===================================================== */}
 
-      <div className="relative z-10 flex h-full p-3 md:p-4 gap-3 md:gap-4">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1800px] gap-4 p-3 md:p-4">
+
 
         {/* ===================================================
             SIDEBAR
@@ -125,52 +133,54 @@ export default function DashboardLayout({
 
         <aside
           className="
+            sticky
+            top-4
             hidden
-            md:flex
-            w-[245px]
+            h-[calc(100vh-2rem)]
+            w-[235px]
             shrink-0
             flex-col
-            rounded-[26px]
-            border
-            border-white/70
-            bg-white/65
-            backdrop-blur-2xl
-            shadow-[0_20px_60px_rgba(52,90,55,0.08)]
             overflow-hidden
+            rounded-[30px]
+            border
+            border-white/80
+            bg-white/55
+            shadow-[0_25px_80px_rgba(30,70,35,0.08)]
+            backdrop-blur-[35px]
+            md:flex
           "
         >
 
-          {/* Brand */}
+          {/* BRAND */}
 
-          <div className="px-6 pt-7 pb-6">
+          <div className="px-6 pb-7 pt-7">
 
             <div className="flex items-center gap-3">
 
               <div
                 className="
                   flex
-                  h-11
-                  w-11
+                  h-10
+                  w-10
                   items-center
                   justify-center
-                  rounded-2xl
+                  rounded-[14px]
                   bg-gradient-to-br
                   from-green-600
-                  to-emerald-500
+                  to-emerald-400
                   text-white
-                  shadow-lg
-                  shadow-green-600/20
+                  shadow-[0_8px_25px_rgba(34,197,94,0.25)]
                 "
               >
-                <Leaf size={22} strokeWidth={2} />
+                <Leaf size={21} strokeWidth={2} />
               </div>
 
               <div>
-                <h1 className="text-[19px] font-bold tracking-tight text-gray-900">
+                <p className="text-[17px] font-bold tracking-tight">
                   AyurHerb
-                </h1>
+                </p>
 
-                <p className="text-[10px] uppercase tracking-[0.18em] text-gray-400">
+                <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-gray-400">
                   Farmer workspace
                 </p>
               </div>
@@ -179,15 +189,16 @@ export default function DashboardLayout({
 
           </div>
 
-          {/* Navigation */}
 
-          <div className="px-3">
+          {/* NAVIGATION */}
 
-            <p className="px-3 mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+          <div className="flex-1 px-3">
+
+            <p className="mb-3 px-3 text-[9px] font-semibold uppercase tracking-[0.2em] text-gray-400">
               Workspace
             </p>
 
-            <nav className="space-y-1.5">
+            <nav className="space-y-1">
 
               {links.map((link) => {
 
@@ -205,39 +216,26 @@ export default function DashboardLayout({
                     key={link.path}
                     to={link.path}
                     end={link.name === "Home"}
-                    className={() =>
-                      `
+                    className={`
                       group
                       relative
                       flex
                       items-center
                       gap-3
-                      rounded-2xl
-                      px-3.5
-                      py-3
+                      rounded-[17px]
+                      px-3
+                      py-2.5
                       text-sm
                       transition-all
-                      duration-300
+                      duration-200
+
                       ${
                         isCurrent
-                          ? `
-                            bg-white/90
-                            text-green-700
-                            shadow-[0_8px_25px_rgba(40,100,50,0.09)]
-                            border
-                            border-white
-                          `
-                          : `
-                            text-gray-500
-                            hover:bg-white/55
-                            hover:text-gray-800
-                          `
+                          ? "bg-white/85 text-green-700 shadow-[0_8px_30px_rgba(30,80,35,0.07)]"
+                          : "text-gray-500 hover:bg-white/50 hover:text-gray-800"
                       }
-                    `
-                    }
+                    `}
                   >
-
-                    {/* Active indicator */}
 
                     {isCurrent && (
                       <span
@@ -245,8 +243,8 @@ export default function DashboardLayout({
                           absolute
                           left-0
                           top-1/2
-                          h-6
-                          w-1
+                          h-5
+                          w-[3px]
                           -translate-y-1/2
                           rounded-r-full
                           bg-green-500
@@ -259,42 +257,40 @@ export default function DashboardLayout({
                         flex
                         h-8
                         w-8
+                        shrink-0
                         items-center
                         justify-center
                         rounded-xl
-                        transition
                         ${
                           isCurrent
                             ? "bg-green-50 text-green-600"
-                            : "bg-transparent text-gray-400 group-hover:text-gray-700"
+                            : "text-gray-400 group-hover:text-gray-700"
                         }
                       `}
                     >
                       {iconMap[link.name]}
                     </span>
 
-                    <span className="flex-1">
+                    <span className="min-w-0 flex-1 truncate">
                       {link.name}
                     </span>
-
-                    {/* Message notification */}
 
                     {link.name === "Messages" &&
                       unreadMessages > 0 && (
                         <span
                           className="
                             flex
-                            min-w-[20px]
                             h-5
+                            min-w-5
+                            shrink-0
                             items-center
                             justify-center
                             rounded-full
                             bg-red-500
-                            px-1.5
-                            text-[10px]
+                            px-1
+                            text-[9px]
                             font-bold
                             text-white
-                            shadow-sm
                           "
                         >
                           {unreadMessages > 9
@@ -311,87 +307,34 @@ export default function DashboardLayout({
 
           </div>
 
-          {/* Bottom section */}
 
-          <div className="mt-auto p-3">
+          {/* LOGOUT */}
 
-            <div
+          <div className="p-3">
+
+            <button
+              onClick={handleLogout}
               className="
+                flex
+                w-full
+                items-center
+                gap-3
                 rounded-2xl
-                border
-                border-white/80
-                bg-white/55
-                p-3
-                backdrop-blur-xl
+                px-3
+                py-3
+                text-xs
+                text-gray-400
+                transition
+                hover:bg-red-50
+                hover:text-red-500
               "
             >
+              <LogOut size={15} />
 
-              <div className="flex items-center gap-3">
+              Sign out
+            </button>
 
-                <div
-                  className="
-                    flex
-                    h-9
-                    w-9
-                    shrink-0
-                    items-center
-                    justify-center
-                    rounded-xl
-                    bg-gradient-to-br
-                    from-green-100
-                    to-emerald-50
-                    text-xs
-                    font-bold
-                    text-green-700
-                  "
-                >
-                  {initials}
-                </div>
-
-                <div className="min-w-0 flex-1">
-
-                  <p className="truncate text-xs font-semibold text-gray-800">
-                    {farmerName || "Farmer"}
-                  </p>
-
-                  <p className="text-[10px] text-gray-400">
-                    {userType} account
-                  </p>
-
-                </div>
-
-                <ChevronDown
-                  size={14}
-                  className="text-gray-400"
-                />
-
-              </div>
-
-              <button
-                onClick={handleLogout}
-                className="
-                  mt-3
-                  flex
-                  w-full
-                  items-center
-                  gap-2
-                  rounded-xl
-                  px-2
-                  py-2
-                  text-xs
-                  text-gray-400
-                  transition
-                  hover:bg-red-50
-                  hover:text-red-500
-                "
-              >
-                <LogOut size={14} />
-                Sign out
-              </button>
-
-            </div>
-
-            <p className="mt-4 text-center text-[9px] text-gray-400">
+            <p className="pt-2 text-center text-[9px] text-gray-400">
               © 2026 AyurHerb
             </p>
 
@@ -399,11 +342,12 @@ export default function DashboardLayout({
 
         </aside>
 
+
         {/* ===================================================
-            MAIN AREA
+            MAIN CONTENT
         =================================================== */}
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="min-w-0 flex-1">
 
           {/* =================================================
               TOP BAR
@@ -411,24 +355,31 @@ export default function DashboardLayout({
 
           <header
             className="
-              mb-3
+              sticky
+              top-3
+              z-30
+              mb-4
               flex
-              h-[68px]
-              shrink-0
+              min-h-[68px]
               items-center
               justify-between
-              rounded-[22px]
+              gap-3
+              rounded-[24px]
               border
-              border-white/70
+              border-white/80
               bg-white/65
               px-4
+              py-3
+              shadow-[0_20px_60px_rgba(30,70,35,0.06)]
+              backdrop-blur-[35px]
+              md:top-4
               md:px-6
-              backdrop-blur-2xl
-              shadow-[0_15px_40px_rgba(52,90,55,0.06)]
             "
           >
 
-            <div className="flex items-center gap-3">
+            {/* LEFT */}
+
+            <div className="flex min-w-0 items-center gap-3">
 
               {/* Mobile logo */}
 
@@ -437,6 +388,7 @@ export default function DashboardLayout({
                   flex
                   h-9
                   w-9
+                  shrink-0
                   items-center
                   justify-center
                   rounded-xl
@@ -448,25 +400,26 @@ export default function DashboardLayout({
                 <Leaf size={18} />
               </div>
 
-              <div>
+              <div className="min-w-0">
 
-                <p className="text-[10px] uppercase tracking-[0.15em] text-gray-400">
-                  {userType} dashboard
+                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                  {userType} workspace
                 </p>
 
-                <p className="text-sm font-semibold text-gray-800">
-                  {farmerName
-                    ? `Welcome back, ${farmerName}`
-                    : "Welcome back"}
+                <p className="truncate text-sm font-semibold text-gray-800">
+                  {pageTitle}
                 </p>
 
               </div>
 
             </div>
 
-            <div className="flex items-center gap-2 md:gap-3">
 
-              {/* Notification */}
+            {/* RIGHT */}
+
+            <div className="flex shrink-0 items-center gap-2">
+
+              {/* MESSAGE BUTTON */}
 
               <button
                 onClick={() =>
@@ -474,6 +427,7 @@ export default function DashboardLayout({
                     "/farmer-dashboard/messages"
                   )
                 }
+                aria-label="Messages"
                 className="
                   relative
                   flex
@@ -484,76 +438,54 @@ export default function DashboardLayout({
                   rounded-xl
                   border
                   border-white
-                  bg-white/70
+                  bg-white/65
                   text-gray-500
-                  shadow-sm
                   transition
-                  hover:-translate-y-0.5
                   hover:bg-white
                   hover:text-green-600
                 "
-                aria-label="Messages"
               >
-
                 <Bell size={18} />
 
                 {unreadMessages > 0 && (
-                  <>
-                    <span
-                      className="
-                        absolute
-                        right-2
-                        top-2
-                        h-2
-                        w-2
-                        rounded-full
-                        bg-red-500
-                        ring-2
-                        ring-white
-                      "
-                    />
-
-                    <span
-                      className="
-                        absolute
-                        -right-1
-                        -top-1
-                        flex
-                        min-w-[18px]
-                        h-[18px]
-                        items-center
-                        justify-center
-                        rounded-full
-                        bg-red-500
-                        px-1
-                        text-[9px]
-                        font-bold
-                        text-white
-                      "
-                    >
-                      {unreadMessages > 9
-                        ? "9+"
-                        : unreadMessages}
-                    </span>
-                  </>
+                  <span
+                    className="
+                      absolute
+                      right-1
+                      top-1
+                      h-2
+                      w-2
+                      rounded-full
+                      bg-red-500
+                      ring-2
+                      ring-white
+                    "
+                  />
                 )}
-
               </button>
 
-              {/* User */}
 
-              <div
+              {/* SINGLE IDENTITY */}
+
+              <button
+                onClick={() =>
+                  navigate(
+                    "/farmer-dashboard/profile"
+                  )
+                }
+                aria-label="Open profile"
                 className="
-                  hidden
-                  sm:flex
+                  flex
                   items-center
                   gap-2
-                  rounded-xl
+                  rounded-2xl
                   border
                   border-white
-                  bg-white/55
-                  px-2.5
+                  bg-white/65
+                  px-2
                   py-1.5
+                  transition
+                  hover:bg-white
                 "
               >
 
@@ -562,10 +494,13 @@ export default function DashboardLayout({
                     flex
                     h-8
                     w-8
+                    shrink-0
                     items-center
                     justify-center
-                    rounded-lg
-                    bg-green-100
+                    rounded-xl
+                    bg-gradient-to-br
+                    from-green-100
+                    to-emerald-50
                     text-[10px]
                     font-bold
                     text-green-700
@@ -574,48 +509,42 @@ export default function DashboardLayout({
                   {initials}
                 </div>
 
-                <div className="max-w-[130px]">
+                <div className="hidden max-w-[120px] text-left sm:block">
 
                   <p className="truncate text-xs font-semibold text-gray-800">
                     {farmerName || "Farmer"}
                   </p>
 
                   <p className="text-[9px] text-gray-400">
-                    Farmer
+                    {userType}
                   </p>
 
                 </div>
 
-              </div>
+              </button>
 
             </div>
 
           </header>
 
+
           {/* =================================================
               PAGE CONTENT
 
               IMPORTANT:
-              This is the ONLY scrolling container.
-              We do NOT call scrollIntoView anywhere here.
+              NO overflow-y-auto HERE.
+
+              Browser owns the page scroll.
           ================================================= */}
 
-          <div
-            className="
-              min-h-0
-              flex-1
-              overflow-y-auto
-              overscroll-contain
-              rounded-[22px]
-              pr-0.5
-              scrollbar-thin
-              scrollbar-thumb-green-200
-              scrollbar-track-transparent
-            "
-          >
-            <div className="min-h-full px-1 pb-4 md:px-2">
+          <div className="w-full pb-10">
+
+            <div className="w-full px-0.5 md:px-1">
+
               <Outlet />
+
             </div>
+
           </div>
 
         </main>
@@ -626,3 +555,59 @@ export default function DashboardLayout({
   );
 }
 
+
+/* =============================================================
+   PAGE TITLE
+============================================================= */
+
+function getPageTitle(pathname: string) {
+
+  if (
+    pathname === "/farmer-dashboard" ||
+    pathname === "/farmer-dashboard/"
+  ) {
+    return "Overview";
+  }
+
+  if (pathname.startsWith("/farmer-dashboard/crops")) {
+    return "My Crops";
+  }
+
+  if (pathname.startsWith("/farmer-dashboard/analytics")) {
+    return "Analytics";
+  }
+
+  if (
+    pathname.startsWith(
+      "/farmer-dashboard/recommendations"
+    )
+  ) {
+    return "Recommendations";
+  }
+
+  if (
+    pathname.startsWith(
+      "/farmer-dashboard/geotagged"
+    )
+  ) {
+    return "Geo Tagging";
+  }
+
+  if (
+    pathname.startsWith(
+      "/farmer-dashboard/messages"
+    )
+  ) {
+    return "Messages";
+  }
+
+  if (
+    pathname.startsWith(
+      "/farmer-dashboard/profile"
+    )
+  ) {
+    return "Profile";
+  }
+
+  return "AyurHerb";
+}

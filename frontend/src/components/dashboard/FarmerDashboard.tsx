@@ -1,32 +1,48 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
 import DashboardLayout from "./DashboardLayout";
 import { useUnread } from "../../context/UnreadContext";
 
-function FarmerDashboard() {
+export default function FarmerDashboard() {
   const [farmerName, setFarmerName] = useState("");
   const { totalUnread } = useUnread();
 
   useEffect(() => {
     const fetchFarmer = async () => {
       try {
-        const token = localStorage.getItem("farmerToken") || localStorage.getItem("token");
+        const token =
+          localStorage.getItem("farmerToken") ||
+          localStorage.getItem("token");
+
         if (!token) {
           console.error("No farmer token found.");
           return;
         }
 
-        const res = await axios.get("http://localhost:8000/api/farmers/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await fetch(
+          "http://localhost:8000/api/farmers/me",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-        if (res.data?.farmer?.name) {
-          setFarmerName(res.data.farmer.name);
-        } else {
-          console.error("Unexpected farmer response:", res.data);
+        if (!response.ok) {
+          throw new Error(
+            `Farmer request failed: ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+
+        if (data?.farmer?.name) {
+          setFarmerName(data.farmer.name);
         }
       } catch (error) {
-        console.error("Error fetching farmer:", error);
+        console.error(
+          "Error fetching farmer:",
+          error
+        );
       }
     };
 
@@ -34,11 +50,34 @@ function FarmerDashboard() {
   }, []);
 
   const farmerLinks = [
-    { name: "Home", path: "/farmer-dashboard" },
-    { name: "My Crops", path: "/farmer-dashboard/crops" },
-    { name: "Messages", path: "/farmer-dashboard/messages" },
-    { name: "Geo Tagging", path: "/farmer-dashboard/geotagged" },
-    { name: "Profile", path: "/farmer-dashboard/profile" },
+    {
+      name: "Home",
+      path: "/farmer-dashboard",
+    },
+    {
+      name: "My Crops",
+      path: "/farmer-dashboard/crops",
+    },
+    {
+      name: "Analytics",
+      path: "/farmer-dashboard/analytics",
+    },
+    {
+      name: "Recommendations",
+      path: "/farmer-dashboard/recommendations",
+    },
+    {
+      name: "Messages",
+      path: "/farmer-dashboard/messages",
+    },
+    {
+      name: "Geo Tagging",
+      path: "/farmer-dashboard/geotagged",
+    },
+    {
+      name: "Profile",
+      path: "/farmer-dashboard/profile",
+    },
   ];
 
   return (
@@ -50,5 +89,3 @@ function FarmerDashboard() {
     />
   );
 }
-
-export default FarmerDashboard;

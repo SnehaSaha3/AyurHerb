@@ -1,22 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import ChatbotCard from "../ChatbotCard";
-import WeatherCard, { type WeatherData } from "../services/Weather";
 
 import {
   ArrowRight,
+  BarChart3,
   CheckCircle2,
   CloudRain,
   Droplets,
   Leaf,
   MapPinned,
-  MessageCircle,
-  PackageCheck,
-  ReceiptText,
+  Sparkles,
   Sprout,
-  WalletCards,
 } from "lucide-react";
+
+import ChatbotCard from "../ChatbotCard";
+
+import WeatherCard, {
+  type WeatherData,
+} from "../services/Weather";
+
+import FarmerBusinessActivity from "../business/FarmerBusinessActivity";
+
+import FarmerGreeting from "../../components/services/Greeting";
+
 
 interface CropSummary {
   cropId: string;
@@ -24,8 +31,13 @@ interface CropSummary {
   season?: string;
   stage?: string;
   moisture?: number;
-  location?: { lat: number; lng: number };
+
+  location?: {
+    lat: number;
+    lng: number;
+  };
 }
+
 
 interface CropRecommendation {
   cropName: string;
@@ -34,350 +46,853 @@ interface CropRecommendation {
   reason: string;
 }
 
-interface Activity {
-  id: string;
-  type: "payment" | "message" | "invoice" | "shipment";
-  title: string;
-  description: string;
-  time: string; // ISO timestamp from the backend
-}
-
-function formatRelativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-}
 
 export default function FarmerHome() {
+
   const navigate = useNavigate();
 
-  const [crops, setCrops] = useState<CropSummary[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const [farmLocation, setFarmLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [weatherData, setWeatherData] = useState<WeatherData>();
-  const [showWeather, setShowWeather] = useState(false);
+  /* =========================================================
+     FARM DATA
+  ========================================================= */
 
-  // Not yet wired to a real endpoint — no /api/recommendations route exists
-  // yet in anything you've shown me. Flagging so this doesn't look "fixed"
-  // when it isn't; say the word if you want this built next.
-  const [recommendations] = useState<CropRecommendation[]>([
-    { cropName: "Turmeric", score: 81, demand: "Medium", reason: "Good compatibility with your soil and current season." },
-    { cropName: "Ashwagandha", score: 74, demand: "High", reason: "Suitable regional conditions with strong market demand." },
-    { cropName: "Tulsi", score: 69, demand: "Medium", reason: "Good seasonal compatibility for your location." },
-  ]);
+  const [crops, setCrops] =
+    useState<CropSummary[]>([]);
 
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [activitiesLoading, setActivitiesLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [farmLocation, setFarmLocation] =
+    useState<{
+      lat: number;
+      lng: number;
+    } | null>(null);
+
+
+  /* =========================================================
+     WEATHER
+  ========================================================= */
+
+  const [weatherData, setWeatherData] =
+    useState<WeatherData>();
+
+  const [showWeather, setShowWeather] =
+    useState(false);
+
+
+  /* =========================================================
+     TEMPORARY RECOMMENDATIONS
+  ========================================================= */
+
+  const recommendations: CropRecommendation[] = [
+    {
+      cropName: "Turmeric",
+      score: 81,
+      demand: "Medium",
+      reason:
+        "Good compatibility with your soil and current season.",
+    },
+
+    {
+      cropName: "Ashwagandha",
+      score: 74,
+      demand: "High",
+      reason:
+        "Suitable regional conditions with strong market demand.",
+    },
+
+    {
+      cropName: "Tulsi",
+      score: 69,
+      demand: "Medium",
+      reason:
+        "Good seasonal compatibility for your location.",
+    },
+  ];
+
+
+  /* =========================================================
+     FETCH CROPS
+  ========================================================= */
 
   useEffect(() => {
+
     const fetchCrops = async () => {
+
       try {
-        const token = localStorage.getItem("farmerToken") || localStorage.getItem("token");
+
+        const token =
+          localStorage.getItem("farmerToken") ||
+          localStorage.getItem("token");
+
         if (!token) {
           setLoading(false);
           return;
         }
 
-        const res = await axios.get("http://localhost:8000/api/crops/mine", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await axios.get(
+          "http://localhost:8000/api/crops/mine",
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
 
-        const allCrops = Array.isArray(res.data?.crops) ? res.data.crops : [];
+        const allCrops =
+          Array.isArray(
+            response.data?.crops
+          )
+            ? response.data.crops
+            : [];
+
         setCrops(allCrops);
 
-        const locatedCrop = allCrops.find((crop: CropSummary) => crop.location);
-        if (locatedCrop?.location) setFarmLocation(locatedCrop.location);
+        const locatedCrop =
+          allCrops.find(
+            (crop: CropSummary) =>
+              crop.location &&
+              typeof crop.location.lat ===
+                "number" &&
+              typeof crop.location.lng ===
+                "number"
+          );
+
+        if (locatedCrop?.location) {
+          setFarmLocation(
+            locatedCrop.location
+          );
+        }
+
       } catch (error) {
-        console.error("Error fetching farmer crops:", error);
+
+        console.error(
+          "Error fetching farmer crops:",
+          error
+        );
+
       } finally {
+
         setLoading(false);
+
       }
+
     };
 
     fetchCrops();
+
   }, []);
+
 
   /* =========================================================
-     REAL BUSINESS ACTIVITY — pulled from Order + Message data via
-     GET /api/farmers/activity (getFarmerActivity controller)
+     SIMPLE FARM METRICS
   ========================================================= */
-  useEffect(() => {
-    const fetchActivity = async () => {
-      try {
-        const token = localStorage.getItem("farmerToken") || localStorage.getItem("token");
-        if (!token) {
-          setActivitiesLoading(false);
-          return;
-        }
-
-        const res = await axios.get("http://localhost:8000/api/farmers/activity", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (res.data?.success) {
-          setActivities(res.data.activities || []);
-        }
-      } catch (error) {
-        console.error("Error fetching farmer activity:", error);
-      } finally {
-        setActivitiesLoading(false);
-      }
-    };
-
-    fetchActivity();
-  }, []);
 
   const avgMoisture = useMemo(() => {
-    const values = crops.map((crop) => crop.moisture).filter((value): value is number => typeof value === "number");
-    if (!values.length) return 0;
-    return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+
+    const values = crops
+      .map(
+        (crop) => crop.moisture
+      )
+      .filter(
+        (
+          value
+        ): value is number =>
+          typeof value === "number"
+      );
+
+    if (!values.length) {
+      return 0;
+    }
+
+    return Math.round(
+      values.reduce(
+        (sum, value) =>
+          sum + value,
+        0
+      ) / values.length
+    );
+
   }, [crops]);
 
-  const geoTagged = useMemo(() => crops.filter((crop) => crop.location).length, [crops]);
-  const weatherTemperature = weatherData?.temp;
 
-  const getActivityIcon = (type: Activity["type"]) => {
-    switch (type) {
-      case "payment": return <WalletCards size={18} strokeWidth={1.8} />;
-      case "message": return <MessageCircle size={18} strokeWidth={1.8} />;
-      case "invoice": return <ReceiptText size={18} strokeWidth={1.8} />;
-      case "shipment": return <PackageCheck size={18} strokeWidth={1.8} />;
-      default: return <Leaf size={18} />;
-    }
-  };
+  const geoTagged = useMemo(
+    () =>
+      crops.filter(
+        (crop) =>
+          !!crop.location
+      ).length,
+    [crops]
+  );
 
-  const getActivityStyle = (type: Activity["type"]) => {
-    switch (type) {
-      case "payment": return "bg-emerald-50 text-emerald-600";
-      case "message": return "bg-blue-50 text-blue-600";
-      case "invoice": return "bg-violet-50 text-violet-600";
-      case "shipment": return "bg-orange-50 text-orange-600";
-      default: return "bg-gray-50 text-gray-600";
-    }
-  };
+
+  /* =========================================================
+     RENDER
+  ========================================================= */
 
   return (
-    <div className="space-y-5 pb-8">
-      <section className="px-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-green-600">Your farm today</p>
-        <div className="mt-1 flex items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 md:text-[28px]">Good to see you again.</h1>
-            <p className="mt-1 text-sm text-gray-500">Here's what's happening with your farm today.</p>
+
+    <div className="space-y-6 pb-10">
+
+
+      {/* =====================================================
+          GREETING / HERO
+      ===================================================== */}
+
+      <section
+        className="
+          relative
+          overflow-hidden
+          rounded-[30px]
+          border
+          border-white/80
+          bg-white/55
+          p-5
+          shadow-[0_25px_70px_rgba(35,75,40,0.07)]
+          backdrop-blur-[35px]
+          sm:p-6
+          md:p-8
+        "
+      >
+
+        {/* ambient glow */}
+
+        <div
+          aria-hidden="true"
+          className="
+            pointer-events-none
+            absolute
+            -right-20
+            -top-24
+            h-64
+            w-64
+            rounded-full
+            bg-green-300/15
+            blur-[80px]
+          "
+        />
+
+        <div className="relative">
+
+          <FarmerGreeting />
+
+
+          <div className="mt-2 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+
+            <div className="max-w-2xl">
+
+              <h1
+                className="
+                  text-3xl
+                  font-semibold
+                  tracking-[-0.04em]
+                  text-gray-900
+                  sm:text-4xl
+                  md:text-[42px]
+                "
+              >
+                Your farm,
+                <span className="text-green-600">
+                  {" "}at a glance.
+                </span>
+              </h1>
+
+              <p className="mt-3 max-w-xl text-sm leading-6 text-gray-500">
+                Monitor your crops, understand
+                current conditions and make
+                better farming decisions.
+              </p>
+
+            </div>
+
+
+            <button
+              onClick={() =>
+                navigate(
+                  "/farmer-dashboard/analytics"
+                )
+              }
+              className="
+                flex
+                w-full
+                items-center
+                justify-center
+                gap-2
+                rounded-2xl
+                border
+                border-white
+                bg-white/70
+                px-4
+                py-3
+                text-xs
+                font-semibold
+                text-green-700
+                shadow-sm
+                transition
+                hover:-translate-y-0.5
+                hover:bg-white
+                sm:w-fit
+              "
+            >
+              <BarChart3 size={16} />
+
+              View analytics
+
+              <ArrowRight size={14} />
+            </button>
+
           </div>
-          <div className="hidden items-center gap-2 rounded-full border border-green-100 bg-green-50/70 px-3 py-1.5 text-xs font-medium text-green-700 sm:flex">
-            <CheckCircle2 size={14} /> Farm connected
+
+
+          {/* STATUS */}
+
+          <div className="mt-6 flex flex-wrap gap-2">
+
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+                rounded-full
+                border
+                border-green-100
+                bg-green-50/70
+                px-3
+                py-1.5
+                text-xs
+                font-medium
+                text-green-700
+              "
+            >
+              <CheckCircle2 size={14} />
+              Farm connected
+            </div>
+
+            <div
+              className="
+                rounded-full
+                border
+                border-white
+                bg-white/55
+                px-3
+                py-1.5
+                text-xs
+                text-gray-500
+              "
+            >
+              {loading
+                ? "Loading crops..."
+                : `${crops.length} registered ${
+                    crops.length === 1
+                      ? "crop"
+                      : "crops"
+                  }`}
+            </div>
+
           </div>
+
         </div>
+
       </section>
 
+
+      {/* =====================================================
+          FARM SNAPSHOT
+      ===================================================== */}
+
       <section>
+
         <div className="mb-3 flex items-center justify-between px-1">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Farm overview</h2>
-        </div>
 
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <div className="rounded-2xl border border-white bg-white/80 p-4 shadow-[0_8px_30px_rgba(40,80,45,0.05)] backdrop-blur-xl">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-gray-500">My crops</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">{loading ? "—" : crops.length}</p>
-              </div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-50 text-green-600">
-                <Sprout size={18} />
-              </div>
-            </div>
-            <p className="mt-2 text-[11px] text-gray-400">Registered crops</p>
-          </div>
-
-          <div className="rounded-2xl border border-white bg-white/80 p-4 shadow-[0_8px_30px_rgba(40,80,45,0.05)] backdrop-blur-xl">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-gray-500">Avg. moisture</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">{loading ? "—" : crops.length ? `${avgMoisture}%` : "--"}</p>
-              </div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
-                <Droplets size={18} />
-              </div>
-            </div>
-            <p className="mt-2 text-[11px] text-gray-400">Based on available crop data</p>
-          </div>
-
-          <div className="rounded-2xl border border-white bg-white/80 p-4 shadow-[0_8px_30px_rgba(40,80,45,0.05)] backdrop-blur-xl">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-gray-500">Geo verified</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">{loading ? "—" : geoTagged}</p>
-              </div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
-                <MapPinned size={18} />
-              </div>
-            </div>
-            <p className="mt-2 text-[11px] text-gray-400">Location verified crops</p>
-          </div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+            Farm snapshot
+          </p>
 
           <button
-            onClick={() => setShowWeather((previous) => !previous)}
-            className="text-left rounded-2xl border border-white bg-white/80 p-4 shadow-[0_8px_30px_rgba(40,80,45,0.05)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white"
+            onClick={() =>
+              navigate(
+                "/farmer-dashboard/analytics"
+              )
+            }
+            className="
+              hidden
+              text-xs
+              font-medium
+              text-green-600
+              hover:text-green-700
+              sm:block
+            "
           >
+            Detailed analytics →
+          </button>
+
+        </div>
+
+
+        <div
+          className="
+            grid
+            grid-cols-2
+            overflow-hidden
+            rounded-[25px]
+            border
+            border-white/80
+            bg-white/55
+            shadow-[0_20px_60px_rgba(35,75,40,0.06)]
+            backdrop-blur-[30px]
+            lg:grid-cols-4
+          "
+        >
+
+          <Metric
+            icon={<Sprout size={18} />}
+            label="Registered crops"
+            value={
+              loading
+                ? "—"
+                : crops.length
+            }
+            description="Active crop records"
+          />
+
+
+          <Metric
+            icon={<Droplets size={18} />}
+            label="Average moisture"
+            value={
+              loading
+                ? "—"
+                : crops.length
+                ? `${avgMoisture}%`
+                : "--"
+            }
+            description="From available data"
+          />
+
+
+          <Metric
+            icon={<MapPinned size={18} />}
+            label="Geo verified"
+            value={
+              loading
+                ? "—"
+                : geoTagged
+            }
+            description="Location-tagged crops"
+          />
+
+
+          <button
+            onClick={() =>
+              setShowWeather(
+                (previous) =>
+                  !previous
+              )
+            }
+            className="
+              border-t
+              border-white/70
+              p-5
+              text-left
+              transition
+              hover:bg-white/50
+              sm:p-6
+              lg:border-l
+              lg:border-t-0
+            "
+          >
+
             <div className="flex items-start justify-between">
+
               <div>
-                <p className="text-xs text-gray-500">Weather</p>
-                <p className="mt-2 text-2xl font-bold text-gray-900">{weatherTemperature != null ? `${weatherTemperature}°` : "--"}</p>
+
+                <p className="text-xs text-gray-500">
+                  Weather
+                </p>
+
+                <p className="mt-2 text-2xl font-semibold text-gray-900">
+                  {weatherData?.temp != null
+                    ? `${weatherData.temp}°`
+                    : "--"}
+                </p>
+
               </div>
+
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
                 <CloudRain size={18} />
               </div>
+
             </div>
-            <p className="mt-2 text-[11px] text-green-600">{showWeather ? "Hide weather" : "View local weather"}</p>
+
+            <p className="mt-2 text-[10px] text-green-600">
+              {showWeather
+                ? "Hide conditions"
+                : "View local conditions"}
+            </p>
+
           </button>
+
         </div>
+
       </section>
 
-      {showWeather && farmLocation && (
-        <section className="rounded-2xl border border-white bg-white/80 p-4 shadow-[0_8px_30px_rgba(40,80,45,0.05)] backdrop-blur-xl">
-          <div className="mb-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-400">Local conditions</p>
-            <p className="mt-1 text-sm text-gray-600">Weather around your farm</p>
-          </div>
-          <WeatherCard lat={farmLocation.lat} lng={farmLocation.lng} setWeatherData={setWeatherData} />
-        </section>
-      )}
-
-      <section className="grid gap-5 xl:grid-cols-[1.6fr_0.9fr]">
-        <div className="rounded-2xl border border-white bg-white/80 p-5 shadow-[0_8px_30px_rgba(40,80,45,0.05)] backdrop-blur-xl">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-50 text-green-600">
-                  <Leaf size={18} />
-                </div>
-                <div>
-                  <h2 className="text-base font-semibold text-gray-900">Crop recommendations</h2>
-                  <p className="text-xs text-gray-400">Based on your farm conditions</p>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate("/farmer-dashboard/recommendations")}
-              className="hidden items-center gap-1 text-xs font-semibold text-green-600 transition hover:text-green-700 sm:flex"
-            >
-              View all <ArrowRight size={14} />
-            </button>
-          </div>
-
-          <div className="mt-5 divide-y divide-gray-100">
-            {recommendations.slice(0, 3).map((recommendation, index) => (
-              <div key={recommendation.cropName} className="flex items-center gap-3 py-4 first:pt-0 last:pb-0">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-50 text-sm font-semibold text-green-700">
-                  {index + 1}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-gray-800">{recommendation.cropName}</p>
-                    {recommendation.demand && (
-                      <span className="rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-semibold text-green-700">
-                        {recommendation.demand} demand
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 truncate text-xs text-gray-400">{recommendation.reason}</p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-sm font-bold text-green-600">{recommendation.score}%</p>
-                  <p className="text-[9px] text-gray-400">suitability</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <button
-            onClick={() => navigate("/farmer-dashboard/recommendations")}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-green-200 py-2.5 text-xs font-semibold text-green-700 transition hover:bg-green-50"
-          >
-            Explore recommendations <ArrowRight size={14} />
-          </button>
-        </div>
-
-        <div className="flex min-h-[330px] flex-col overflow-hidden rounded-2xl border border-white bg-white/80 shadow-[0_8px_30px_rgba(40,80,45,0.05)] backdrop-blur-xl">
-          <div className="border-b border-gray-100 px-5 py-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-50 text-green-600">
-                <Sprout size={18} />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold text-gray-900">AyurMate</h2>
-                <p className="text-xs text-gray-400">Your farming assistant</p>
-              </div>
-            </div>
-          </div>
-          <div className="min-h-0 flex-1 overflow-hidden p-4">
-            <ChatbotCard farmLocation={farmLocation} weatherData={weatherData} />
-          </div>
-        </div>
-      </section>
 
       {/* =====================================================
-          BUSINESS ACTIVITY — real data, no more hardcoded array
+          WEATHER
       ===================================================== */}
-      <section className="overflow-hidden rounded-2xl border border-white bg-white/80 shadow-[0_8px_30px_rgba(40,80,45,0.05)] backdrop-blur-xl">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <WalletCards size={18} />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">Business activity</h2>
-              <p className="text-xs text-gray-400">Orders, payments and buyer communication</p>
-            </div>
+
+      {showWeather && farmLocation && (
+
+        <section
+          className="
+            rounded-[25px]
+            border
+            border-white/80
+            bg-white/55
+            p-5
+            shadow-[0_20px_60px_rgba(35,75,40,0.06)]
+            backdrop-blur-[30px]
+            sm:p-6
+          "
+        >
+
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+            Local conditions
+          </p>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Weather around your farm
+          </p>
+
+          <div className="mt-4">
+
+            <WeatherCard
+              lat={farmLocation.lat}
+              lng={farmLocation.lng}
+              setWeatherData={
+                setWeatherData
+              }
+            />
+
           </div>
+
+        </section>
+
+      )}
+
+
+      {/* =====================================================
+          RECOMMENDATIONS
+      ===================================================== */}
+
+      <section
+        className="
+          rounded-[25px]
+          border
+          border-white/80
+          bg-white/55
+          p-5
+          shadow-[0_20px_60px_rgba(35,75,40,0.06)]
+          backdrop-blur-[30px]
+          sm:p-6
+        "
+      >
+
+        <div className="flex items-start justify-between gap-3">
+
+          <div className="flex items-center gap-3">
+
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-600">
+              <Leaf size={18} />
+            </div>
+
+            <div>
+
+              <h2 className="text-base font-semibold text-gray-900">
+                Crop recommendations
+              </h2>
+
+              <p className="text-xs text-gray-400">
+                Opportunities for your farm
+              </p>
+
+            </div>
+
+          </div>
+
+
           <button
-            onClick={() => navigate("/farmer-dashboard/activity")}
-            className="flex items-center gap-1 text-xs font-semibold text-green-600 hover:text-green-700"
+            onClick={() =>
+              navigate(
+                "/farmer-dashboard/recommendations"
+              )
+            }
+            className="
+              hidden
+              text-xs
+              font-semibold
+              text-green-600
+              sm:block
+            "
           >
-            View all <ArrowRight size={14} />
+            View all
           </button>
+
         </div>
 
-        <div className="divide-y divide-gray-100">
-          {activitiesLoading && (
-            <div className="px-5 py-6 text-center text-sm text-gray-400">Loading activity...</div>
-          )}
 
-          {!activitiesLoading && activities.length === 0 && (
-            <div className="px-5 py-6 text-center text-sm text-gray-400">No activity yet.</div>
-          )}
+        <div className="mt-5 grid gap-2 lg:grid-cols-3">
 
-          {activities.map((activity) => (
-            <button
-              key={activity.id}
-              onClick={() => {
-                if (activity.type === "message") navigate("/farmer-dashboard/messages");
-              }}
-              className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition hover:bg-gray-50/80"
-            >
-              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${getActivityStyle(activity.type)}`}>
-                {getActivityIcon(activity.type)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-gray-800">{activity.title}</p>
-                <p className="mt-0.5 truncate text-xs text-gray-400">{activity.description}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="text-[10px] text-gray-400">{formatRelativeTime(activity.time)}</span>
-                <ArrowRight size={14} className="text-gray-300" />
-              </div>
-            </button>
-          ))}
+          {recommendations
+            .map(
+              (
+                recommendation,
+                index
+              ) => (
+
+                <div
+                  key={
+                    recommendation.cropName
+                  }
+                  className="
+                    flex
+                    items-center
+                    gap-3
+                    rounded-2xl
+                    border
+                    border-white
+                    bg-white/45
+                    p-3
+                    transition
+                    hover:bg-white/70
+                  "
+                >
+
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-50 text-xs font-bold text-green-700">
+                    {index + 1}
+                  </div>
+
+
+                  <div className="min-w-0 flex-1">
+
+                    <div className="flex flex-wrap items-center gap-2">
+
+                      <p className="text-sm font-semibold text-gray-800">
+                        {
+                          recommendation.cropName
+                        }
+                      </p>
+
+                      {recommendation.demand && (
+                        <span className="rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-semibold text-green-700">
+                          {
+                            recommendation.demand
+                          }
+                        </span>
+                      )}
+
+                    </div>
+
+                    <p className="mt-1 line-clamp-2 text-xs text-gray-400">
+                      {
+                        recommendation.reason
+                      }
+                    </p>
+
+                  </div>
+
+
+                  <div className="shrink-0 text-right">
+
+                    <p className="text-sm font-bold text-green-600">
+                      {
+                        recommendation.score
+                      }%
+                    </p>
+
+                    <p className="text-[9px] text-gray-400">
+                      fit
+                    </p>
+
+                  </div>
+
+                </div>
+
+              )
+            )}
+
         </div>
+
+
+        <button
+          onClick={() =>
+            navigate(
+              "/farmer-dashboard/recommendations"
+            )
+          }
+          className="
+            mt-4
+            flex
+            w-full
+            items-center
+            justify-center
+            gap-2
+            rounded-2xl
+            bg-green-600
+            py-3
+            text-xs
+            font-semibold
+            text-white
+            shadow-[0_10px_30px_rgba(34,197,94,0.18)]
+            transition
+            hover:bg-green-700
+          "
+        >
+          Explore recommendations
+          <ArrowRight size={14} />
+        </button>
+
       </section>
+
+
+      {/* =====================================================
+          AYURMATE
+      ===================================================== */}
+
+      <section
+        className="
+          flex
+          min-h-[340px]
+          flex-col
+          overflow-hidden
+          rounded-[25px]
+          border
+          border-white/80
+          bg-white/55
+          shadow-[0_20px_60px_rgba(35,75,40,0.06)]
+          backdrop-blur-[30px]
+        "
+      >
+
+        <div className="border-b border-white/70 px-5 py-4 sm:px-6">
+
+          <div className="flex items-center gap-3">
+
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-50 text-green-600">
+              <Sparkles size={17} />
+            </div>
+
+            <div>
+
+              <h2 className="text-sm font-semibold text-gray-900">
+                AyurMate
+              </h2>
+
+              <p className="text-xs text-gray-400">
+                Your farming assistant
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div className="min-h-[280px] flex-1 p-4">
+
+          <ChatbotCard
+            farmLocation={farmLocation}
+            weatherData={weatherData}
+          />
+
+        </div>
+
+      </section>
+
+
+      {/* =====================================================
+          BUSINESS ACTIVITY
+      ===================================================== */}
+
+      <section>
+
+        <div className="mb-3 px-1">
+
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+            Business
+          </p>
+
+          <h2 className="mt-1 text-base font-semibold text-gray-900">
+            Recent activity
+          </h2>
+
+        </div>
+
+        <FarmerBusinessActivity />
+
+      </section>
+
     </div>
+  );
+}
+
+
+/* =============================================================
+   METRIC
+============================================================= */
+
+function Metric({
+  icon,
+  label,
+  value,
+  description,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  description: string;
+}) {
+
+  return (
+
+    <div
+      className="
+        p-5
+        transition
+        hover:bg-white/45
+        sm:p-6
+      "
+    >
+
+      <div className="flex items-start justify-between gap-2">
+
+        <div className="min-w-0">
+
+          <p className="truncate text-xs text-gray-500">
+            {label}
+          </p>
+
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-900">
+            {value}
+          </p>
+
+        </div>
+
+
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-600">
+          {icon}
+        </div>
+
+      </div>
+
+
+      <p className="mt-2 text-[10px] text-gray-400">
+        {description}
+      </p>
+
+    </div>
+
   );
 }
