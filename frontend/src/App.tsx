@@ -19,6 +19,7 @@ import CompanyMessages from "./components/message/CompanyMessage"
 import FarmerMessages from "./components/message/FarmerMessage";
 import LoginForm from "./components/forms/LoginForm"
 import CompanyProfile from "./components/pages/CompanyProfile"
+import CompanyAnalytics from "./components/analytics/ComapanyAnalytics";
 function App() {
   const [loading, setLoading] = useState(true);
 
@@ -55,6 +56,7 @@ function App() {
 
       <Route path="/company-dashboard" element={<CompanyDashboard />}>
         <Route index element={<CompanyHome />} />
+        <Route path="analytics" element={<CompanyAnalytics />} />
         <Route path="messages" element={<CompanyMessages />} />
         <Route path="profile" element={<CompanyProfile />} />
       </Route>
