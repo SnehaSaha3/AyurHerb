@@ -10,15 +10,9 @@ import { authMiddleware } from "../middlewares/authMiddleware";
 
 const router = Router();
 
-/* -------------------- ADD / UPSERT A CROP -------------------- */
+
 router.post("/add", authMiddleware, async (req: any, res: Response) => {
   try {
-    // quantity added — this was the actual gap: nothing in this route
-    // ever wrote it, so every crop silently sat at the schema default
-    // of 0 regardless of what the farmer intended. Required now, not
-    // optional — a crop listing with no quantity can't be ordered or
-    // stock-checked, so letting it default to 0 was the real bug, not
-    // a reasonable default.
     const { cropName, season, soilType, lat, lng, quantity } = req.body;
     if (!cropName || lat === undefined || lng === undefined) {
       return res.status(400).json({
@@ -36,9 +30,6 @@ router.post("/add", authMiddleware, async (req: any, res: Response) => {
     const farmer = await Farmer.findById(req.user.farmerId);
     if (!farmer)
       return res.status(404).json({ success: false, error: "Farmer not found" });
-
-    // farmer.walletAddress must be a real on-chain address for this farmer.
-    // See note below about the Farmer model.
     if (!farmer.walletAddress) {
       return res.status(400).json({
         success: false,
@@ -83,14 +74,6 @@ router.post("/add", authMiddleware, async (req: any, res: Response) => {
   }
 });
 
-/* -------------------- EDIT A CROP (MongoDB only, for now) --------------------
- * Scoped deliberately to Mongo, not blockchain: on-chain updateCrop()
- * is separate in-progress work (adding quantity to CropRegistry.sol
- * and redeploying). Blocking quantity edits on that finishing first
- * would stall testing the escrow/stock flow for no reason — this
- * unblocks that now. Once the on-chain side lands, this route is
- * where the corresponding updateCropOnChain() call gets added.
- */
 router.patch("/:cropId", authMiddleware, async (req: any, res: Response) => {
   try {
     const { cropId } = req.params;
@@ -110,10 +93,6 @@ router.patch("/:cropId", authMiddleware, async (req: any, res: Response) => {
     if (!farmer) {
       return res.status(404).json({ success: false, error: "Farmer not found" });
     }
-
-    // Ownership check — a farmer can only edit their OWN crop. cropId
-    // alone isn't enough to prove ownership, so this must be scoped
-    // to req.user.farmerId's own crops array, not a bare Crop lookup.
     const crop = farmer.crops?.find((c: any) => c.cropId === cropId);
     if (!crop) {
       return res.status(404).json({
@@ -146,7 +125,7 @@ router.patch("/:cropId", authMiddleware, async (req: any, res: Response) => {
   }
 });
 
-/* -------------------- GET LOGGED-IN FARMER CROPS -------------------- */
+
 router.get("/mine", authMiddleware, async (req: any, res: Response) => {
   try {
     const farmer = await Farmer.findById(req.user.farmerId);
@@ -181,11 +160,6 @@ router.get("/mine", authMiddleware, async (req: any, res: Response) => {
       console.warn("⚠️ farmer has no walletAddress → skipping blockchain");
     }
 
-    // quantity added — blockchain-sourced crops don't carry quantity
-    // yet (that's the separate on-chain-quantity work in progress),
-    // so onChainFormatted intentionally has no quantity field here.
-    // Off-chain (MongoDB) crops are the authoritative source for
-    // quantity right now — see the flagged collision risk on this.
     const offChain =
       farmer.crops?.map((c) => ({
         cropId: c.cropId ?? "",
@@ -213,7 +187,6 @@ router.get("/mine", authMiddleware, async (req: any, res: Response) => {
 });
 
 
-/* -------------------- GET CROPS BY FARMER _id -------------------- */
 router.get("/:farmerId", async (req: Request, res: Response) => {
   try {
     const farmer = await Farmer.findById(req.params.farmerId);
@@ -260,7 +233,7 @@ router.get("/:farmerId", async (req: Request, res: Response) => {
   }
 });
 
-/* -------------------- GET ALL CROPS -------------------- */
+
 router.get("/", async (_req: Request, res: Response) => {
   try {
     let onChain: any[] = [];
@@ -293,9 +266,6 @@ router.get("/", async (_req: Request, res: Response) => {
         farmerId: matchedFarmer?._id || c.farmer,
       };
     });
-
-    // Build a set of "farmerId:cropId" already represented on-chain,
-    // so the same crop isn't shown a second time from MongoDB.
     const onChainKeys = new Set(
       onChainFormatted.map((c) => `${c.farmerId}:${c.cropId}`)
     );
@@ -304,7 +274,7 @@ router.get("/", async (_req: Request, res: Response) => {
     farmers.forEach((f) => {
       (f.crops ?? []).forEach((c) => {
         const key = `${f._id}:${c.cropId ?? ""}`;
-        if (onChainKeys.has(key)) return; // already have this one from chain
+        if (onChainKeys.has(key)) return; 
 
         offChain.push({
           cropId: c.cropId ?? "",

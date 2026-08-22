@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { registerCompany, loginCompany } from "../controllers/companyController";
+import { getCompanyAnalytics } from "../controllers/analyticsController";
 import { companyAuthMiddleware } from "../middlewares/companyAuthMiddleware";
 import Company from "../models/company";
 import { loginLimiter, registerLimiter } from "../middlewares/rateLimiter";
@@ -14,9 +15,6 @@ router.post("/login", loginLimiter, loginCompany);
 
 router.get("/me", companyAuthMiddleware, async (req: any, res: Response) => {
   try {
-    // -privateKey added: Company now has a custodial wallet key, same
-    // as Farmer — /me must never leak it, mirroring farmerRoutes.ts's
-    // existing "-password -privateKey" guard.
     const company = await Company.findById(req.user.companyId).select("-password -privateKey");
     if (!company) return res.status(404).json({ error: "Company not found" });
     res.json({ company });
@@ -24,6 +22,9 @@ router.get("/me", companyAuthMiddleware, async (req: any, res: Response) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+
+router.get("/analytics", companyAuthMiddleware, getCompanyAnalytics);
 
 
 router.get("/:companyId", async (req: Request, res: Response) => {

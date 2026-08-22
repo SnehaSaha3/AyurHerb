@@ -1,15 +1,20 @@
 import { Router, Request, Response } from "express";
 import Farmer from "../models/farmer";
-import {registerFarmer,loginFarmer, getFarmerActivity} from "../controllers/farmerController";
+import {
+  registerFarmer,
+  loginFarmer,
+  getFarmerActivity,
+} from "../controllers/farmerController";
+import { getFarmerAnalytics } from "../controllers/analyticsController";
 import { authMiddleware } from "../middlewares/authMiddleware";
-import { loginLimiter, registerLimiter} from "../middlewares/rateLimiter";
+import { loginLimiter, registerLimiter } from "../middlewares/rateLimiter";
 
 const router = Router();
 
 
-router.post("/register",registerLimiter,registerFarmer);
+router.post("/register", registerLimiter, registerFarmer);
 
-router.post(  "/login",loginLimiter,loginFarmer);
+router.post("/login", loginLimiter, loginFarmer);
 
 
 
@@ -57,6 +62,13 @@ router.get(
   "/activity",
   authMiddleware,
   getFarmerActivity
+);
+
+
+router.get(
+  "/analytics",
+  authMiddleware,
+  getFarmerAnalytics
 );
 
 
