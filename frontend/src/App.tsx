@@ -20,6 +20,7 @@ import FarmerMessages from "./components/message/FarmerMessage";
 import LoginForm from "./components/forms/LoginForm"
 import CompanyProfile from "./components/pages/CompanyProfile"
 import CompanyAnalytics from "./components/analytics/ComapanyAnalytics";
+import FarmerAnalytics from "./components/analytics/FarmerAnalytics";
 function App() {
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +52,7 @@ function App() {
         <Route path="crops" element={<CropList />} />
         <Route path="geotagged" element={<CropMap />} />
         <Route path="messages" element={<FarmerMessages />} />
+        <Route path="analytics" element={<FarmerAnalytics />}/>
         <Route path="profile" element={<Profile />} />
      </Route>
 
