@@ -21,6 +21,9 @@ import LoginForm from "./components/forms/LoginForm"
 import CompanyProfile from "./components/pages/CompanyProfile"
 import CompanyAnalytics from "./components/analytics/ComapanyAnalytics";
 import FarmerAnalytics from "./components/analytics/FarmerAnalytics";
+import CompanyExplore from "./components/companypages/CompanyExplore"
+import CompanyOrders from "./components/companypages/CompanyOrders";
+import CompanyShipments from "./components/companypages/CompanyShipments";
 function App() {
   const [loading, setLoading] = useState(true);
 
@@ -58,6 +61,11 @@ function App() {
 
       <Route path="/company-dashboard" element={<CompanyDashboard />}>
         <Route index element={<CompanyHome />} />
+        <Route path="explore" element={<CompanyExplore />} />
+     <Route
+      path="orders"
+      element={<CompanyOrders />} />
+        <Route path="shipments" element={<CompanyShipments />} />
         <Route path="analytics" element={<CompanyAnalytics />} />
         <Route path="messages" element={<CompanyMessages />} />
         <Route path="profile" element={<CompanyProfile />} />

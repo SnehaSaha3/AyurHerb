@@ -40,9 +40,6 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
   const [registeredData, setRegisteredData] = useState<Farmer | Company | null>(null);
   const navigate = useNavigate();
 
-  // Capture device location up front for farmers — this becomes the
-  // location of their first seeded crop, and what puts them on the
-  // CropMap right after registering instead of needing AddCrop later.
   useEffect(() => {
     if (role !== "farmer") return;
 
@@ -78,10 +75,6 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
           ? "http://localhost:8000/api/farmers/register"
           : "http://localhost:8000/api/companies/register";
 
-      // Both roles require a password now — the backend enforces this
-      // for farmers too (see registerFarmer's validation). Farmers
-      // additionally get their captured device coordinates attached,
-      // so the backend can seed a real first crop instead of (0,0).
       const payload =
         role === "farmer"
           ? { ...formData, lat: coords?.lat, lng: coords?.lng }
@@ -100,10 +93,10 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
 
       const data = await res.json();
 
-      // Save token using one key everywhere
+      
 localStorage.setItem("token", data.token);
 
-// Save user details
+
 if (role === "farmer") {
   localStorage.setItem("farmerToken", data.token);
   localStorage.setItem("farmer", JSON.stringify(data.farmer));
@@ -121,7 +114,7 @@ if (role === "farmer") {
       if (err instanceof Error) {
         setMessage("❌ " + err.message);
       } else {
-        setMessage("❌ An unknown error occurred");
+        setMessage(" An unknown error occurred");
       }
     } finally {
       setLoading(false);
@@ -149,16 +142,18 @@ if (role === "farmer") {
           required
         />
 
-        <input
-          type="text"
-          name="contact"
-          placeholder="Contact Number"
-          value={formData.contact}
-          onChange={handleChange}
-          className="border p-2 w-full rounded"
-          required
-        />
-
+       <input
+         type="tel"
+         name="contact"
+         placeholder="Contact Number"
+         value={formData.contact}
+         onChange={handleChange}
+         className="border p-2 w-full rounded"
+         required
+         inputMode="numeric"
+         pattern="[0-9]{10}"
+         maxLength={10}
+       />
         <input
           type="email"
           name="email"

@@ -5,24 +5,26 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
-  ExternalLink,
-  Leaf,
-  Link2,
-  PackageCheck,
-  ShieldCheck,
-  Truck,
-  Users,
+  Package,
+  Sprout,
+  TrendingUp,
+  WalletCards,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface Farmer {
   _id: string;
   name: string;
+  address?: string;
+}
+
+interface Invoice {
+  invoiceNumber: string;
+  qrToken: string;
 }
 
 interface Escrow {
   escrowChainTxHash?: string;
-  amountPaidPaise?: number;
 }
 
 interface Tranche {
@@ -35,30 +37,51 @@ interface Tranche {
 
 interface Order {
   _id: string;
+  cropId: string;
   cropName: string;
   quantity: number;
   amount: number;
   status: string;
-  farmerId?: Farmer;
+
   fees?: {
     grandTotal?: number;
   };
+
+  farmerId: Farmer;
+
+  verification?: {
+    passed: boolean;
+    reason?: string;
+  };
+
+  stockCheck?: {
+    passed: boolean;
+    reason?: string;
+  };
+
   escrow?: Escrow;
+  invoice?: Invoice;
   tranches?: Tranche[];
 }
 
-interface CompanyStats {
+interface Stats {
   activeOrders: number;
   pendingOrders: number;
   deliveredOrders: number;
   totalSpend: number;
 }
 
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 export default function CompanyHome() {
   const navigate = useNavigate();
 
   const [orders, setOrders] = useState<Order[]>([]);
-  const [stats, setStats] = useState<CompanyStats>({
+  const [stats, setStats] = useState<Stats>({
     activeOrders: 0,
     pendingOrders: 0,
     deliveredOrders: 0,
@@ -66,190 +89,248 @@ export default function CompanyHome() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      const token = localStorage.getItem("companyToken");
+  const fetchOrders = async () => {
+    const token = localStorage.getItem("companyToken");
 
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+    if (!token) {
+      setMessage("Please log in as a company.");
+      setLoading(false);
+      return;
+    }
 
-      try {
-        const response = await axios.get(
-          "http://localhost:8000/api/orders/company",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+    try {
+      const res = await axios.get(
+        "http://localhost:8000/api/orders/company",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (res.data.success) {
+        setOrders(res.data.orders || []);
+
+        setStats(
+          res.data.stats || {
+            activeOrders: 0,
+            pendingOrders: 0,
+            deliveredOrders: 0,
+            totalSpend: 0,
           }
         );
-
-        if (response.data?.success) {
-          setOrders(response.data.orders || []);
-
-          setStats(
-            response.data.stats || {
-              activeOrders: 0,
-              pendingOrders: 0,
-              deliveredOrders: 0,
-              totalSpend: 0,
-            }
-          );
-        }
-      } catch (error) {
-        console.error("Failed to load company overview:", error);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error("Failed to fetch company orders:", error);
+      setMessage("Unable to load company overview.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchDashboardData();
+  useEffect(() => {
+    fetchOrders();
   }, []);
 
-  const systemStats = useMemo(() => {
-    const uniqueFarmers = new Set(
+  /*
+   * Load Razorpay checkout.
+   */
+  useEffect(() => {
+    const scriptId = "razorpay-checkout-script";
+
+    if (document.getElementById(scriptId)) return;
+
+    const script = document.createElement("script");
+
+    script.id = scriptId;
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+
+    document.body.appendChild(script);
+  }, []);
+
+  /*
+   * Orders waiting for company payment.
+   */
+  const paymentOrders = useMemo(
+    () =>
+      orders.filter(
+        (order) => order.status === "awaiting_payment"
+      ),
+    [orders]
+  );
+
+  /*
+   * Crop demand calculated from REAL orders.
+   */
+  const cropDemand = useMemo(() => {
+    const demand: Record<string, number> = {};
+
+    orders.forEach((order) => {
+      demand[order.cropName] =
+        (demand[order.cropName] || 0) + order.quantity;
+    });
+
+    return Object.entries(demand)
+      .map(([crop, quantity]) => ({
+        crop,
+        quantity,
+      }))
+      .sort((a, b) => b.quantity - a.quantity);
+  }, [orders]);
+
+  const mostOrderedCrop = cropDemand[0];
+
+  const totalQuantity = useMemo(
+    () =>
+      orders.reduce(
+        (total, order) => total + Number(order.quantity || 0),
+        0
+      ),
+    [orders]
+  );
+
+  const activeSuppliers = useMemo(() => {
+    return new Set(
       orders
         .map((order) => order.farmerId?._id)
         .filter(Boolean)
-    );
+    ).size;
+  }, [orders]);
 
-    const escrowOrders = orders.filter(
-      (order) => order.escrow?.escrowChainTxHash
-    );
+  const startPayment = async (order: Order) => {
+    const token = localStorage.getItem("companyToken");
 
-    const shipmentOrders = orders.filter((order) => {
-      const shipment = order.tranches?.find(
-        (tranche) => tranche.type === "shipment"
+    if (!token) {
+      alert("Please log in again.");
+      return;
+    }
+
+    try {
+      setPayingOrderId(order._id);
+      setMessage("");
+
+      const createRes = await axios.post(
+        `http://localhost:8000/api/orders/${order._id}/create-payment`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
 
-      return shipment?.status === "released";
-    });
+      const data = createRes.data;
 
-    const delayedOrders = orders.filter(
-      (order) =>
-        order.status === "shipment_delayed" ||
-        order.status === "delayed"
-    );
-
-    return {
-      farmers: uniqueFarmers.size,
-      escrow: escrowOrders.length,
-      shipments: shipmentOrders.length,
-      delayed: delayedOrders.length,
-    };
-  }, [orders]);
-
-  const attentionItems = useMemo(() => {
-    const items: {
-      title: string;
-      description: string;
-      route: string;
-      icon: React.ReactNode;
-    }[] = [];
-
-    const paymentOrders = orders.filter(
-      (order) => order.status === "awaiting_payment"
-    );
-
-    if (paymentOrders.length > 0) {
-      items.push({
-        title: `${paymentOrders.length} order${
-          paymentOrders.length > 1 ? "s" : ""
-        } awaiting payment`,
-        description:
-          "Verified procurement requests are ready for escrow funding.",
-        route: "/company-dashboard/orders",
-        icon: <Clock3 size={16} />,
-      });
-    }
-
-    const verificationOrders = orders.filter(
-      (order) =>
-        order.status === "pending_verification" ||
-        order.status === "pending_stock_check"
-    );
-
-    if (verificationOrders.length > 0) {
-      items.push({
-        title: `${verificationOrders.length} order${
-          verificationOrders.length > 1 ? "s" : ""
-        } under agent review`,
-        description:
-          "Verification or stock checks are still being processed.",
-        route: "/company-dashboard/orders",
-        icon: <ShieldCheck size={16} />,
-      });
-    }
-
-    if (systemStats.delayed > 0) {
-      items.push({
-        title: `${systemStats.delayed} shipment${
-          systemStats.delayed > 1 ? "s" : ""
-        } delayed`,
-        description:
-          "Check the logistics workspace for the latest shipment state.",
-        route: "/company-dashboard/shipments",
-        icon: <Truck size={16} />,
-      });
-    }
-
-    return items.slice(0, 3);
-  }, [orders, systemStats.delayed]);
-
-  const recentActivity = useMemo(() => {
-    return orders
-      .slice()
-      .sort((a, b) => {
-        return (
-          String(b._id).localeCompare(String(a._id))
+      if (!data.success) {
+        throw new Error(
+          data.error || "Unable to create payment request"
         );
-      })
-      .slice(0, 5);
-  }, [orders]);
+      }
 
-  const formatMoney = (value: number) => {
-    return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+      if (!window.Razorpay) {
+        throw new Error(
+          "Razorpay Checkout is still loading. Please try again."
+        );
+      }
+
+      const razorpay = new window.Razorpay({
+        key: data.keyId,
+        amount: data.amountPaise,
+        currency: data.currency || "INR",
+        name: "AyurHerb",
+        description: `Payment for ${order.cropName}`,
+        order_id: data.razorpayOrderId,
+
+        handler: async function (response: any) {
+          try {
+            const verifyRes = await axios.post(
+              `http://localhost:8000/api/orders/${order._id}/verify-payment`,
+              {
+                razorpayPaymentId:
+                  response.razorpay_payment_id,
+
+                razorpaySignature:
+                  response.razorpay_signature,
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+            if (!verifyRes.data.success) {
+              throw new Error(
+                verifyRes.data.error ||
+                  "Payment verification failed"
+              );
+            }
+
+            setMessage(
+              "Payment verified. Escrow funded and invoice generated."
+            );
+
+            await fetchOrders();
+          } catch (error: any) {
+            console.error("Payment verification error:", error);
+
+            alert(
+              error.response?.data?.error ||
+                error.message ||
+                "Payment verification failed"
+            );
+          } finally {
+            setPayingOrderId(null);
+          }
+        },
+
+        modal: {
+          ondismiss: () => {
+            setPayingOrderId(null);
+          },
+        },
+
+        theme: {
+          color: "#16a34a",
+        },
+      });
+
+      razorpay.open();
+    } catch (error: any) {
+      console.error("Payment error:", error);
+
+      alert(
+        error.response?.data?.error ||
+          error.message ||
+          "Unable to start payment"
+      );
+
+      setPayingOrderId(null);
+    }
   };
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "awaiting_payment":
-        return "Payment required";
-
-      case "payment_processing":
-        return "Payment processing";
-
-      case "escrow_funded":
-        return "Escrow funded";
-
-      case "shipment_released":
-        return "Shipment released";
-
-      case "delivery_released":
-        return "Delivered";
-
-      case "pending_verification":
-        return "Agent verification";
-
-      case "pending_stock_check":
-        return "Stock verification";
-
-      case "verification_failed":
-      case "rejected":
-        return "Rejected";
-
-      default:
-        return status.replaceAll("_", " ");
+  const openInvoice = (order: Order) => {
+    if (!order.invoice?.qrToken) {
+      alert("Invoice has not been generated yet.");
+      return;
     }
+
+    const url =
+      `http://localhost:8000/api/public/verify/` +
+      `${order._id}/` +
+      `${order.invoice.qrToken}/pdf`;
+
+    window.open(url, "_blank");
   };
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-sm text-gray-500">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-800" />
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="text-sm text-gray-500">
           Loading company overview...
         </div>
       </div>
@@ -257,543 +338,574 @@ export default function CompanyHome() {
   }
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-7">
+    <div className="space-y-7">
 
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
+      {/* HEADER */}
 
-      <section className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+      <div className="rounded-3xl bg-gradient-to-r from-[#183c29] via-[#24613c] to-[#4d8b52] p-7 text-white shadow-sm">
 
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
 
-            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-gray-400">
-              Supply network operational
-            </span>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.15em] text-white/60">
+              Company overview
+            </p>
+
+            <h1 className="mt-2 text-2xl font-semibold">
+              Procurement at a glance
+            </h1>
+
+            <p className="mt-2 max-w-xl text-sm text-white/70">
+              Monitor your agricultural supply network,
+              payments and procurement performance.
+            </p>
           </div>
 
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
-            Company Overview
-          </h1>
+          <button
+            onClick={() =>
+              navigate("/company-dashboard/orders")
+            }
+            className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-[#205332] transition hover:bg-white/90"
+          >
+            View Orders
+            <ArrowRight size={15} />
+          </button>
 
-          <p className="mt-1 text-sm text-gray-500">
-            A live view of procurement, verification, escrow and logistics.
-          </p>
         </div>
+      </div>
 
-        <button
-          onClick={() => navigate("/company-dashboard/explore")}
-          className="inline-flex items-center gap-2 self-start rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 md:self-auto"
-        >
-          Explore farm network
-          <ArrowRight size={15} />
-        </button>
+      {message && (
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          {message}
+        </div>
+      )}
 
-      </section>
+      {/* STATS */}
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
-      {/* =====================================================
-          SYSTEM METRICS
-      ===================================================== */}
-
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-        <MetricCard
-          icon={<Users size={17} />}
-          label="Connected farmers"
-          value={systemStats.farmers}
-          detail="Across your current orders"
-        />
-
-        <MetricCard
-          icon={<PackageCheck size={17} />}
-          label="Active procurement"
+        <StatCard
+          title="Active Orders"
           value={stats.activeOrders}
-          detail={`${stats.pendingOrders} pending`}
+          icon={<Package size={19} />}
+          tone="green"
         />
 
-        <MetricCard
-          icon={<Link2 size={17} />}
-          label="Escrow records"
-          value={systemStats.escrow}
-          detail="Blockchain-linked orders"
+        <StatCard
+          title="Pending Orders"
+          value={stats.pendingOrders}
+          icon={<Clock3 size={19} />}
+          tone="amber"
         />
 
-        <MetricCard
-          icon={<Truck size={17} />}
-          label="Shipments moving"
-          value={systemStats.shipments}
-          detail={
-            systemStats.delayed > 0
-              ? `${systemStats.delayed} require attention`
-              : "No delayed shipments"
-          }
+        <StatCard
+          title="Delivered"
+          value={stats.deliveredOrders}
+          icon={<CheckCircle2 size={19} />}
+          tone="purple"
         />
 
-      </section>
+        <StatCard
+          title="Total Spend"
+          value={`₹${stats.totalSpend.toLocaleString("en-IN")}`}
+          icon={<WalletCards size={19} />}
+          tone="blue"
+        />
 
+      </div>
 
-      {/* =====================================================
-          NETWORK FLOW + ATTENTION
-      ===================================================== */}
+      {/* PAYMENT AREA */}
 
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1.7fr_1fr]">
+      <section>
 
-        {/* SUPPLY FLOW */}
+        <div className="mb-4 flex items-end justify-between">
 
-        <div className="rounded-2xl border border-gray-200 bg-white">
-
-          <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
-
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">
-                Supply network
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-800">
+                Payment Required
               </h2>
 
-              <p className="mt-1 text-xs text-gray-500">
-                Current state of the procurement pipeline
-              </p>
+              {paymentOrders.length > 0 && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                  {paymentOrders.length}
+                </span>
+              )}
             </div>
 
-            <Leaf
-              size={18}
-              className="text-emerald-600"
-            />
-
+            <p className="mt-1 text-xs text-gray-500">
+              Orders approved by verification and stock agents.
+            </p>
           </div>
 
-
-          <div className="px-6 py-8">
-
-            <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
-
-              <FlowNode
-                label="Farmers"
-                value={systemStats.farmers}
-                icon={<Users size={18} />}
-              />
-
-              <FlowNode
-                label="Orders"
-                value={stats.activeOrders}
-                icon={<PackageCheck size={18} />}
-              />
-
-              <FlowNode
-                label="Escrow"
-                value={systemStats.escrow}
-                icon={<Link2 size={18} />}
-              />
-
-              <FlowNode
-                label="Shipments"
-                value={systemStats.shipments}
-                icon={<Truck size={18} />}
-              />
-
-            </div>
-
-
-            <div className="mt-8 flex items-center gap-3">
-
-              <div className="h-px flex-1 bg-gray-200" />
-
-              <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-400">
-                Verified supply flow
-              </span>
-
-              <div className="h-px flex-1 bg-gray-200" />
-
-            </div>
-
-
-            <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-
-              <SystemState
-                icon={<ShieldCheck size={16} />}
-                title="Agent verification"
-                text="Orders pass verification before payment."
-              />
-
-              <SystemState
-                icon={<Link2 size={16} />}
-                title="Blockchain audit"
-                text="Escrow events can be linked to chain records."
-              />
-
-              <SystemState
-                icon={<Truck size={16} />}
-                title="Automated release"
-                text="Shipment state follows the procurement flow."
-              />
-
-            </div>
-
-          </div>
+          {paymentOrders.length > 0 && (
+            <button
+              onClick={() =>
+                navigate("/company-dashboard/orders")
+              }
+              className="text-xs font-medium text-green-700 hover:text-green-900"
+            >
+              Manage payments →
+            </button>
+          )}
 
         </div>
 
+        {paymentOrders.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
 
-        {/* ATTENTION */}
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-green-50 text-green-600">
+              <CheckCircle2 size={21} />
+            </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white">
+            <p className="mt-3 text-sm font-medium text-gray-700">
+              No payments requiring action
+            </p>
 
-          <div className="border-b border-gray-100 px-6 py-5">
-
-            <h2 className="text-sm font-semibold text-gray-900">
-              Needs attention
-            </h2>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Actions that currently require company attention.
+            <p className="mt-1 text-xs text-gray-400">
+              Agent-approved orders will appear here.
             </p>
 
           </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
 
+            {paymentOrders.slice(0, 4).map((order) => {
 
-          <div className="divide-y divide-gray-100">
+              const payable =
+                order.fees?.grandTotal ||
+                order.amount ||
+                0;
 
-            {attentionItems.length === 0 ? (
-
-              <div className="flex flex-col items-center px-6 py-12 text-center">
-
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                  <CheckCircle2 size={19} />
-                </div>
-
-                <p className="text-sm font-medium text-gray-800">
-                  Everything looks clear
-                </p>
-
-                <p className="mt-1 text-xs text-gray-400">
-                  No immediate actions are waiting.
-                </p>
-
-              </div>
-
-            ) : (
-
-              attentionItems.map((item, index) => (
-
-                <button
-                  key={index}
-                  onClick={() => navigate(item.route)}
-                  className="group flex w-full items-start gap-3 px-6 py-4 text-left transition hover:bg-gray-50"
+              return (
+                <motion.div
+                  key={order._id}
+                  whileHover={{ y: -2 }}
+                  className="relative overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm"
                 >
 
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-                    {item.icon}
+                  <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-full bg-amber-50" />
+
+                  <div className="relative p-5">
+
+                    <div className="flex items-start justify-between gap-4">
+
+                      <div className="flex items-center gap-3">
+
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-green-50 text-green-700">
+                          <Sprout size={21} />
+                        </div>
+
+                        <div>
+                          <h3 className="font-semibold text-gray-800">
+                            {order.cropName}
+                          </h3>
+
+                          <p className="text-xs text-gray-500">
+                            {order.farmerId?.name ||
+                              "Unknown farmer"}
+                          </p>
+                        </div>
+
+                      </div>
+
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-700">
+                        PAYMENT REQUIRED
+                      </span>
+
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+
+                      <div className="rounded-xl bg-gray-50 p-3">
+                        <p className="text-[10px] uppercase tracking-wide text-gray-400">
+                          Quantity
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-gray-700">
+                          {order.quantity} kg
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl bg-gray-50 p-3">
+                        <p className="text-[10px] uppercase tracking-wide text-gray-400">
+                          Amount
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-gray-700">
+                          ₹{Number(payable).toLocaleString("en-IN")}
+                        </p>
+                      </div>
+
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+
+                      <span className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-medium text-green-700">
+                        <CheckCircle2 size={11} />
+                        Company verified
+                      </span>
+
+                      <span className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-medium text-green-700">
+                        <CheckCircle2 size={11} />
+                        Stock verified
+                      </span>
+
+                    </div>
+
+                    <button
+                      onClick={() => startPayment(order)}
+                      disabled={payingOrderId === order._id}
+                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1f7a3f] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#176332] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <WalletCards size={16} />
+
+                      {payingOrderId === order._id
+                        ? "Opening payment..."
+                        : `Pay ₹${Number(payable).toLocaleString("en-IN")}`}
+                    </button>
+
                   </div>
-
-                  <div className="min-w-0 flex-1">
-
-                    <p className="text-sm font-medium text-gray-800">
-                      {item.title}
-                    </p>
-
-                    <p className="mt-1 text-xs leading-5 text-gray-500">
-                      {item.description}
-                    </p>
-
-                  </div>
-
-                  <ArrowRight
-                    size={14}
-                    className="mt-2 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-gray-600"
-                  />
-
-                </button>
-
-              ))
-
-            )}
+                </motion.div>
+              );
+            })}
 
           </div>
-
-        </div>
+        )}
 
       </section>
 
+      {/* BUSINESS SNAPSHOT */}
 
-      {/* =====================================================
-          PROCUREMENT + SYSTEM ACTIVITY
-      ===================================================== */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
 
-      <section className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
 
-        {/* PROCUREMENT SNAPSHOT */}
+          <div className="flex items-center gap-3">
 
-        <div className="rounded-2xl border border-gray-200 bg-white">
-
-          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700">
+              <TrendingUp size={19} />
+            </div>
 
             <div>
-              <h2 className="text-sm font-semibold text-gray-900">
-                Procurement snapshot
+              <p className="text-xs text-gray-400">
+                Most ordered crop
+              </p>
+
+              <p className="mt-0.5 font-semibold text-gray-800">
+                {mostOrderedCrop?.crop || "No data yet"}
+              </p>
+            </div>
+
+          </div>
+
+          <div className="mt-5">
+            <p className="text-2xl font-semibold text-gray-800">
+              {mostOrderedCrop
+                ? `${mostOrderedCrop.quantity.toLocaleString("en-IN")} kg`
+                : "—"}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-400">
+              Total ordered quantity
+            </p>
+          </div>
+
+        </div>
+
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+
+          <p className="text-xs text-gray-400">
+            Procurement volume
+          </p>
+
+          <p className="mt-2 text-2xl font-semibold text-gray-800">
+            {totalQuantity.toLocaleString("en-IN")} kg
+          </p>
+
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100">
+            <div className="h-full w-[72%] rounded-full bg-green-500" />
+          </div>
+
+          <p className="mt-2 text-xs text-gray-400">
+            Across {orders.length} orders
+          </p>
+
+        </div>
+
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+
+          <p className="text-xs text-gray-400">
+            Supplier network
+          </p>
+
+          <p className="mt-2 text-2xl font-semibold text-gray-800">
+            {activeSuppliers}
+          </p>
+
+          <p className="mt-1 text-xs text-gray-400">
+            Farmers involved in procurement
+          </p>
+
+          <button
+            onClick={() =>
+              navigate("/company-dashboard/explore")
+            }
+            className="mt-4 text-xs font-medium text-green-700 hover:text-green-900"
+          >
+            Explore farm network →
+          </button>
+
+        </div>
+
+      </div>
+
+      {/* CROP DEMAND */}
+
+      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+
+        <div className="flex items-center justify-between">
+
+          <div>
+            <h2 className="font-semibold text-gray-800">
+              Procurement by Crop
+            </h2>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Crops ordered by your company, based on actual order data.
+            </p>
+          </div>
+
+          <button
+            onClick={() =>
+              navigate("/company-dashboard/analytics")
+            }
+            className="text-xs font-medium text-green-700 hover:text-green-900"
+          >
+            Detailed analytics →
+          </button>
+
+        </div>
+
+        {cropDemand.length === 0 ? (
+          <div className="py-10 text-center text-sm text-gray-400">
+            Order data will appear here.
+          </div>
+        ) : (
+          <div className="mt-6 space-y-4">
+
+            {cropDemand.slice(0, 5).map((item, index) => {
+
+              const max =
+                cropDemand[0]?.quantity || 1;
+
+              const percentage =
+                (item.quantity / max) * 100;
+
+              return (
+                <div key={item.crop}>
+
+                  <div className="mb-1.5 flex justify-between">
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-gray-500">
+                        #{index + 1}
+                      </span>
+
+                      <span className="text-sm font-medium text-gray-700">
+                        {item.crop}
+                      </span>
+                    </div>
+
+                    <span className="text-xs font-semibold text-gray-600">
+                      {item.quantity.toLocaleString("en-IN")} kg
+                    </span>
+
+                  </div>
+
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{
+                        width: `${percentage}%`,
+                      }}
+                      transition={{
+                        duration: 0.6,
+                        delay: index * 0.08,
+                      }}
+                      className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400"
+                    />
+
+                  </div>
+
+                </div>
+              );
+            })}
+
+          </div>
+        )}
+
+      </section>
+
+      {/* RECENT ACTIVITY */}
+
+      <section className="rounded-2xl border bg-white shadow-sm">
+
+        <div className="border-b px-6 py-5">
+
+          <div className="flex items-center justify-between">
+
+            <div>
+              <h2 className="font-semibold text-gray-800">
+                Recent Procurement Activity
               </h2>
 
               <p className="mt-1 text-xs text-gray-500">
-                High-level financial state
+                Latest activity across your orders.
               </p>
             </div>
 
             <button
-              onClick={() => navigate("/company-dashboard/orders")}
-              className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-900"
+              onClick={() =>
+                navigate("/company-dashboard/orders")
+              }
+              className="text-xs font-medium text-green-700 hover:text-green-900"
             >
-              Open orders
-              <ExternalLink size={12} />
+              View all →
             </button>
-
-          </div>
-
-
-          <div className="grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-
-            <div className="px-6 py-6">
-              <p className="text-[11px] text-gray-400">
-                Committed value
-              </p>
-
-              <p className="mt-2 text-xl font-semibold tracking-tight text-gray-900">
-                {formatMoney(stats.totalSpend)}
-              </p>
-            </div>
-
-            <div className="px-6 py-6">
-              <p className="text-[11px] text-gray-400">
-                Pending payment
-              </p>
-
-              <p className="mt-2 text-xl font-semibold tracking-tight text-gray-900">
-                {orders.filter(
-                  (order) =>
-                    order.status === "awaiting_payment"
-                ).length}
-              </p>
-            </div>
-
-            <div className="px-6 py-6">
-              <p className="text-[11px] text-gray-400">
-                Delivered
-              </p>
-
-              <p className="mt-2 text-xl font-semibold tracking-tight text-gray-900">
-                {stats.deliveredOrders}
-              </p>
-            </div>
 
           </div>
 
         </div>
 
+        <div className="divide-y">
 
-        {/* RECENT SYSTEM ACTIVITY */}
+          {orders.slice(0, 5).map((order) => {
 
-        <div className="rounded-2xl border border-gray-200 bg-white">
+            const amount =
+              order.fees?.grandTotal ||
+              order.amount ||
+              0;
 
-          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
+            return (
+              <div
+                key={order._id}
+                className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
 
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">
-                System activity
-              </h2>
+                <div className="flex items-center gap-3">
 
-              <p className="mt-1 text-xs text-gray-500">
-                Latest procurement states
-              </p>
-            </div>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-50 text-green-600">
+                    <Sprout size={17} />
+                  </div>
 
-            <button
-              onClick={() => navigate("/company-dashboard/orders")}
-              className="text-xs font-medium text-gray-500 hover:text-gray-900"
-            >
-              View all
-            </button>
+                  <div>
 
-          </div>
-
-
-          <div className="divide-y divide-gray-100">
-
-            {recentActivity.length === 0 ? (
-
-              <div className="px-6 py-10 text-center text-xs text-gray-400">
-                No activity yet.
-              </div>
-
-            ) : (
-
-              recentActivity.map((order) => (
-
-                <button
-                  key={order._id}
-                  onClick={() =>
-                    navigate("/company-dashboard/orders")
-                  }
-                  className="group flex w-full items-center gap-3 px-6 py-3.5 text-left hover:bg-gray-50"
-                >
-
-                  <div className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-
-                  <div className="min-w-0 flex-1">
-
-                    <p className="truncate text-xs font-medium text-gray-800">
+                    <p className="text-sm font-medium text-gray-700">
                       {order.cropName}
                     </p>
 
-                    <p className="mt-0.5 text-[10px] capitalize text-gray-400">
-                      {getStatusLabel(order.status)}
+                    <p className="text-xs text-gray-400">
+                      {order.quantity} kg ·{" "}
+                      {order.farmerId?.name ||
+                        "Unknown farmer"}
                     </p>
 
                   </div>
 
-                  <span className="text-[10px] text-gray-400">
-                    {order.quantity} kg
+                </div>
+
+                <div className="flex items-center gap-4">
+
+                  <span className="text-sm font-semibold text-gray-700">
+                    ₹{Number(amount).toLocaleString("en-IN")}
                   </span>
 
-                </button>
+                  {order.status === "awaiting_payment" ? (
+                    <button
+                      onClick={() => startPayment(order)}
+                      disabled={payingOrderId === order._id}
+                      className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                    >
+                      Pay
+                    </button>
+                  ) : order.invoice ? (
+                    <button
+                      onClick={() => openInvoice(order)}
+                      className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                    >
+                      Invoice
+                    </button>
+                  ) : (
+                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-medium text-gray-500">
+                      {order.status.replaceAll("_", " ")}
+                    </span>
+                  )}
 
-              ))
+                </div>
 
-            )}
+              </div>
+            );
+          })}
 
-          </div>
+          {orders.length === 0 && (
+            <div className="px-6 py-10 text-center text-sm text-gray-400">
+              No procurement activity yet.
+            </div>
+          )}
 
         </div>
 
       </section>
 
-
-      {/* =====================================================
-          FOOTER STATEMENT
-      ===================================================== */}
-
-      <div className="border-t border-gray-200 pt-5">
-
-        <div className="flex flex-col justify-between gap-2 text-[11px] text-gray-400 sm:flex-row">
-
-          <p>
-            AyurHerb procurement infrastructure
-          </p>
-
-          <p>
-            Verification · Escrow · Blockchain audit · Logistics
-          </p>
-
-        </div>
-
-      </div>
-
     </div>
   );
 }
 
+/* ============================================================
+   STAT CARD
+============================================================ */
 
-/* =============================================================
-   SMALL COMPONENTS
-============================================================= */
-
-function MetricCard({
-  icon,
-  label,
+function StatCard({
+  title,
   value,
-  detail,
+  icon,
+  tone,
 }: {
-  icon: React.ReactNode;
-  label: string;
+  title: string;
   value: string | number;
-  detail: string;
+  icon: React.ReactNode;
+  tone: "green" | "amber" | "purple" | "blue";
 }) {
+  const tones = {
+    green: "bg-green-50 text-green-700",
+    amber: "bg-amber-50 text-amber-700",
+    purple: "bg-purple-50 text-purple-700",
+    blue: "bg-blue-50 text-blue-700",
+  };
+
   return (
     <motion.div
-      whileHover={{ y: -2 }}
-      transition={{ duration: 0.15 }}
-      className="rounded-2xl border border-gray-200 bg-white p-5"
+      whileHover={{ y: -3 }}
+      className="rounded-2xl border bg-white p-5 shadow-sm"
     >
       <div className="flex items-center justify-between">
 
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50 text-gray-500">
-          {icon}
-        </div>
-
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-
-      </div>
-
-      <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.08em] text-gray-400">
-        {label}
-      </p>
-
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-gray-900">
-        {value}
-      </p>
-
-      <p className="mt-1 text-[11px] text-gray-400">
-        {detail}
-      </p>
-    </motion.div>
-  );
-}
-
-
-function FlowNode({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="relative rounded-xl border border-gray-200 bg-gray-50/70 p-4">
-
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-gray-500 shadow-sm">
-        {icon}
-      </div>
-
-      <p className="mt-4 text-[11px] text-gray-400">
-        {label}
-      </p>
-
-      <p className="mt-1 text-xl font-semibold text-gray-900">
-        {value}
-      </p>
-
-    </div>
-  );
-}
-
-
-function SystemState({
-  icon,
-  title,
-  text,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className="flex gap-3 rounded-xl border border-gray-100 bg-white p-3.5">
-
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-        {icon}
-      </div>
-
-      <div>
-        <p className="text-xs font-medium text-gray-800">
+        <p className="text-xs font-medium text-gray-400">
           {title}
         </p>
 
-        <p className="mt-1 text-[10px] leading-4 text-gray-400">
-          {text}
-        </p>
+        <div
+          className={`flex h-9 w-9 items-center justify-center rounded-xl ${tones[tone]}`}
+        >
+          {icon}
+        </div>
+
       </div>
 
-    </div>
+      <p className="mt-4 text-2xl font-semibold text-gray-800">
+        {value}
+      </p>
+
+    </motion.div>
   );
 }
