@@ -5,13 +5,13 @@ export type OrderStatus =
   | "verification_failed"
   | "pending_stock_check"
   | "insufficient_stock"
-  | "awaiting_payment"        // confirmed on-chain, Razorpay checkout not yet started
-  | "payment_processing"      // Razorpay order created, waiting on checkout completion
-  | "escrow_funded"           // payment captured + verified, sitting in platform's account
-  | "pending_admin_review"    // fraud agent flagged — waiting on admin decision
-  | "admin_held"              // admin explicitly held the release
-  | "shipment_released"       // first tranche fired, farmer told to start shipment
-  | "delivery_released"       // final tranche fired, order complete
+  | "awaiting_payment"        
+  | "payment_processing"      
+  | "escrow_funded"           
+  | "pending_admin_review"    
+  | "admin_held"              
+  | "shipment_released"       
+  | "delivery_released"       
   | "disputed"
   | "rejected";
 
@@ -22,7 +22,7 @@ export interface ITranche {
   percent: number;
   amount: number;
   releasedAt?: Date;
-  chainTxHash?: string;   // hash of {orderId, type, amount, timestamp} logged on-chain
+  chainTxHash?: string;   
   status: "pending" | "released";
 }
 
@@ -32,18 +32,18 @@ export interface IOrder extends Document {
   cropId: string;
   cropName: string;
   quantity: number;
-  amount: number;   // crop subtotal — 100% owed to farmer, unchanged meaning from before
+  amount: number;   
   status: OrderStatus;
 
-  // ── Fee breakdown — computed server-side at payment creation, never
-  // trusted from the client. See services/feeService.ts for the logic.
+  
   fees?: {
     platformFeePercent: number;
     platformFeeAmount: number;
     transportationFeeAmount: number;
     gstOnFeesPercent: number;
     gstOnFeesAmount: number;
-    grandTotal: number;   // what the company actually pays via Razorpay
+    grandTotal: number;   
+    
   };
 
   verification: {
@@ -58,21 +58,22 @@ export interface IOrder extends Document {
     reason?: string;
   };
 
-  // On-chain hash logged once the order itself is confirmed (existing behavior)
+  
   chainTxHash?: string;
 
-  // ── Razorpay escrow (TEST MODE — see razorpayService.ts) ──────────
+ 
   escrow: {
     razorpayOrderId?: string;
     razorpayPaymentId?: string;
     razorpaySignature?: string;
-    amountPaidPaise?: number;      // Razorpay works in paise, kept exact
+    amountPaidPaise?: number;     
     currency: string;
     fundedAt?: Date;
-    escrowChainTxHash?: string;    // hash of payment details, logged on-chain
+    escrowChainTxHash?: string;   
   };
 
-  // ── Fraud agent output — admin sees THIS, never raw payment fields ─
+  
+  
   fraudCheck?: {
     riskScore: number;
     requiresAdminReview: boolean;
@@ -82,7 +83,7 @@ export interface IOrder extends Document {
     checkedAt: Date;
   };
 
-  // ── Admin decision ──────────────────────────────────────────────
+  
   adminReview?: {
     decision: "pending" | "approved" | "held";
     reviewedBy?: mongoose.Types.ObjectId;
@@ -94,13 +95,11 @@ export interface IOrder extends Document {
 
   invoice?: {
     invoiceNumber: string;
-    invoiceText: string;      // short AI-written note, shown in-app
-    invoicePdfBase64: string; // branded PDF from the invoice agent — store in
-                               // Mongo for the demo; swap for S3/cloud storage
-                               // + a URL reference before this goes past demo scale
+    invoiceText: string;      
+    invoicePdfBase64: string; 
     generatedAt: Date;
-    qrToken: string;          // random token, part of the public verify URL
-    qrCodeDataUrl: string;    // base64 PNG, printed on farmer's packs
+    qrToken: string;          
+    qrCodeDataUrl: string;    
   };
 
   createdAt: Date;

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel , Field
 from typing import Optional, List
 
 class VerifyCompanyRequest(BaseModel):
@@ -87,3 +87,19 @@ class InvoiceResponse(BaseModel):
     invoiceNumber: str
     invoiceText: str          # short LLM-written note, shown in-app
     pdfBase64: str             # branded PDF, ba
+
+
+
+class LogisticsRequest(BaseModel):
+    farmerLat: float
+    farmerLng: float
+    quantity: float = Field(gt=0)
+    cropName: str
+
+
+class LogisticsResponse(BaseModel):
+    success: bool
+    vehicle: Optional[dict] = None
+    reason: str
+    confidence: float = 0
+    agent: str = "logistics"

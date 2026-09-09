@@ -12,6 +12,7 @@ import weatherRoutes from "./routes/weatherRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import { initSocket } from "./socket";
 import orderRoutes from "./routes/orderRoutes"
+import shipmentRoutes from "./routes/shipmentRoutes";
 import publicVerifyRoutes from "./routes/publicRoutes"
 
 
@@ -31,6 +32,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/crops", cropRoutes);
 app.use("/api/weather", weatherRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/shipments", shipmentRoutes);
 app.use("/api/public", publicVerifyRoutes)
 
 mongoose.connect(process.env.MONGODB_URI as string)

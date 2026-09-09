@@ -23,7 +23,8 @@ import CompanyAnalytics from "./components/analytics/ComapanyAnalytics";
 import FarmerAnalytics from "./components/analytics/FarmerAnalytics";
 import CompanyExplore from "./components/companypages/CompanyExplore"
 import CompanyOrders from "./components/companypages/CompanyOrders";
-import CompanyShipments from "./components/companypages/CompanyShipments";
+import CompanyShipments from "./components/shipment/CompanyShipments";
+import FarmerShipments from "./components/shipment/FarmerShipment";
 function App() {
   const [loading, setLoading] = useState(true);
 
@@ -54,6 +55,7 @@ function App() {
         <Route index element={<Home />} />
         <Route path="crops" element={<CropList />} />
         <Route path="geotagged" element={<CropMap />} />
+        <Route path="shipments" element={<FarmerShipments />}/>
         <Route path="messages" element={<FarmerMessages />} />
         <Route path="analytics" element={<FarmerAnalytics />}/>
         <Route path="profile" element={<Profile />} />

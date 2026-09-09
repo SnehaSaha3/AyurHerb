@@ -63,6 +63,10 @@ export default function FarmerDashboard() {
       path: "/farmer-dashboard/analytics",
     },
     {
+    name: "Shipments",
+    path: "/farmer-dashboard/shipments",
+    },
+    {
       name: "Recommendations",
       path: "/farmer-dashboard/recommendations",
     },

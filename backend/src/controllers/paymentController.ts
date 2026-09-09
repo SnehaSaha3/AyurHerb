@@ -10,103 +10,73 @@ import {
   verifyPaymentSignature,
 } from "../services/paymentService";
 
-import {
-  generateQrToken,
-  generateQrCodeDataUrl,
-} from "../services/qrService";
-
+import { generateQrToken, generateQrCodeDataUrl } from "../services/qrService";
 import { computeOrderFees } from "../services/feeService";
-
-import {
-  decrementFarmerStock,
-} from "../services/farmerStock";
+import { decrementFarmerStock } from "../services/farmerStock";
 
 import {
   logConfirmedOrderOnChain,
   logEscrowFundedOnChain,
+  logTrancheReleasedOnChain,
 } from "./orderController";
 
+import { createShipmentForOrder } from "../services/logisticsService";
 import { emitToUser } from "../socket";
 
-const AGENTS_URL =
-  process.env.AGENTS_URL ||
-  "http://localhost:8001";
+const AGENTS_URL = process.env.AGENTS_URL || "http://localhost:8001";
+const BASE_URL = process.env.PUBLIC_APP_URL || "http://localhost:8000";
+const SHIPMENT_PERCENT = 10;
+const DELIVERY_PERCENT = 90;
+
+function assertCompanyOwnsOrder(order: any, req: any) {
+  if (order.companyId.toString() !== req.user.companyId.toString()) {
+    const err: any = new Error("You are not authorized to access this order");
+    err.status = 403;
+    throw err;
+  }
+}
+
+function sendError(res: Response, error: any) {
+  console.error(error);
+  const status = error.status || 500;
+  return res.status(status).json({
+    success: false,
+    error: error.message || "Server error",
+  });
+}
 
 /* ============================================================
    CREATE RAZORPAY PAYMENT ORDER
    POST /api/orders/:orderId/create-payment
 ============================================================ */
 
-export async function createPaymentOrder(
-  req: any,
-  res: Response
-) {
+export async function createPaymentOrder(req: any, res: Response) {
   try {
-    const order =
-      await Order.findById(
-        req.params.orderId
-      );
-
+    const order = await Order.findById(req.params.orderId);
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found",
-      });
+      return res.status(404).json({ success: false, error: "Order not found" });
     }
 
-    /*
-     * Company authentication is already applied
-     * by the route, but we ALSO verify ownership.
-     */
-    if (
-      order.companyId.toString() !==
-      req.user.companyId.toString()
-    ) {
-      return res.status(403).json({
-        success: false,
-        error:
-          "You are not authorized to pay for this order",
-      });
-    }
+    assertCompanyOwnsOrder(order, req);
 
-    if (
-      order.status !==
-      "awaiting_payment"
-    ) {
+    if (order.status !== "awaiting_payment") {
       return res.status(409).json({
         success: false,
-        error:
-          `Order is in status '${order.status}', not payable`,
+        error: `Order is in status '${order.status}', not payable`,
       });
     }
 
-    const fees = computeOrderFees(
-      order.amount,
-      order.quantity
-    );
-
-    order.fees = fees;
-
-    const {
-      razorpayOrderId,
-      amountPaise,
-      keyId,
-    } = await createRazorpayOrder(
+    const fees = computeOrderFees(order.amount, order.quantity);
+    const { razorpayOrderId, amountPaise, keyId } = await createRazorpayOrder(
       fees.grandTotal,
       order.id
     );
 
-    order.escrow.razorpayOrderId =
-      razorpayOrderId;
-
-    order.escrow.amountPaidPaise =
-      amountPaise;
-
+    order.fees = fees;
+    order.escrow.razorpayOrderId = razorpayOrderId;
+    order.escrow.amountPaidPaise = amountPaise;
     order.escrow.currency = "INR";
-
-    order.status =
-      "payment_processing";
-
+    order.status = "payment_processing";
     await order.save();
 
     return res.json({
@@ -119,17 +89,7 @@ export async function createPaymentOrder(
       orderId: order.id,
     });
   } catch (error: any) {
-    console.error(
-      "createPaymentOrder error:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      error:
-        error.message ||
-        "Server error",
-    });
+    return sendError(res, error);
   }
 }
 
@@ -138,109 +98,75 @@ export async function createPaymentOrder(
    POST /api/orders/:orderId/verify-payment
 ============================================================ */
 
-export async function verifyPayment(
-  req: any,
-  res: Response
-) {
+export async function verifyPayment(req: any, res: Response) {
   try {
-    const {
+    const { razorpayPaymentId, razorpaySignature } = req.body;
+    if (!razorpayPaymentId || !razorpaySignature) {
+      return res.status(400).json({
+        success: false,
+        error: "razorpayPaymentId and razorpaySignature are required",
+      });
+    }
+
+    const preCheck = await Order.findById(req.params.orderId);
+    if (!preCheck) {
+      return res.status(404).json({ success: false, error: "Order not found" });
+    }
+
+    assertCompanyOwnsOrder(preCheck, req);
+
+    const razorpayOrderId = preCheck.escrow?.razorpayOrderId;
+    if (!razorpayOrderId) {
+      return res.status(400).json({
+        success: false,
+        error: "No payment order was created for this order",
+      });
+    }
+
+    const valid = verifyPaymentSignature(
+      razorpayOrderId,
       razorpayPaymentId,
-      razorpaySignature,
-    } = req.body;
-
-    if (
-      !razorpayPaymentId ||
-      !razorpaySignature
-    ) {
-      return res.status(400).json({
-        success: false,
-        error:
-          "razorpayPaymentId and razorpaySignature are required",
-      });
-    }
-
-    const order =
-      await Order.findById(
-        req.params.orderId
-      );
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found",
-      });
-    }
-
-    /*
-     * IMPORTANT:
-     * Only the company that created the order
-     * can verify its payment.
-     */
-    if (
-      order.companyId.toString() !==
-      req.user.companyId.toString()
-    ) {
-      return res.status(403).json({
-        success: false,
-        error:
-          "You are not authorized to verify this payment",
-      });
-    }
-
-    if (
-      !order.escrow?.razorpayOrderId
-    ) {
-      return res.status(400).json({
-        success: false,
-        error:
-          "No payment order was created for this order",
-      });
-    }
-
-    const valid =
-      verifyPaymentSignature(
-        order.escrow
-          .razorpayOrderId,
-        razorpayPaymentId,
-        razorpaySignature
-      );
-
+      razorpaySignature
+    );
     if (!valid) {
       return res.status(400).json({
         success: false,
-        error:
-          "Payment signature verification failed",
+        error: "Payment signature verification failed",
       });
     }
 
-    /*
-     * Prevent duplicate verification.
-     */
-    if (
-      order.escrow
-        ?.razorpayPaymentId
-    ) {
+    const order = await Order.findOneAndUpdate(
+      {
+        _id: req.params.orderId,
+        "escrow.razorpayPaymentId": { $exists: false },
+      },
+      {
+        $set: {
+          "escrow.razorpayPaymentId": razorpayPaymentId,
+          "escrow.razorpaySignature": razorpaySignature,
+          "escrow.fundedAt": new Date(),
+          status: "escrow_funded",
+        },
+      },
+      { new: true }
+    );
+
+    if (!order) {
       return res.status(409).json({
         success: false,
-        error:
-          "Payment has already been verified",
+        error: "Payment has already been verified",
       });
     }
 
-    /*
-     * Reserve stock.
-     */
-    const stockResult =
-      await decrementFarmerStock(
-        order.farmerId.toString(),
-        order.cropId,
-        order.quantity
-      );
+    const stockResult = await decrementFarmerStock(
+      order.farmerId.toString(),
+      order.cropId,
+      order.quantity
+    );
 
     if (!stockResult.success) {
       order.status = "rejected";
       await order.save();
-
       return res.status(409).json({
         success: false,
         error: stockResult.reason,
@@ -249,448 +175,170 @@ export async function verifyPayment(
       });
     }
 
-    /*
-     * Mark escrow funded.
-     */
-    order.escrow.razorpayPaymentId =
-      razorpayPaymentId;
-
-    order.escrow.razorpaySignature =
-      razorpaySignature;
-
-    order.escrow.fundedAt =
-      new Date();
-
-    order.status =
-      "escrow_funded";
-
-    /*
-     * Blockchain escrow record.
-     */
-    const {
-      txHash: escrowTxHash,
-    } =
-      await logEscrowFundedOnChain({
-        orderId: order.id,
-        razorpayOrderId:
-          order.escrow
-            .razorpayOrderId,
-        razorpayPaymentId,
-        amountPaidPaise:
-          order.escrow
-            .amountPaidPaise!,
-      });
-
-    order.escrow.escrowChainTxHash =
-      escrowTxHash;
-
-    /*
-     * Load company + farmer.
-     */
-    const [company, farmer] =
-      await Promise.all([
-        Company.findById(
-          order.companyId
-        ),
-        Farmer.findById(
-          order.farmerId
-        ),
-      ]);
+    const [company, farmer] = await Promise.all([
+      Company.findById(order.companyId),
+      Farmer.findById(order.farmerId),
+    ]);
 
     if (!company || !farmer) {
-      throw new Error(
-        "Company or farmer not found"
-      );
+      throw new Error("Company or farmer not found");
     }
 
-    /*
-     * Fraud agent.
-     */
-    await axios.post(
-      `${AGENTS_URL}/escrow/check-fraud`,
-      {
-        orderId: order.id,
-
-        companyId:
-          order.companyId.toString(),
-
-        farmerId:
-          order.farmerId.toString(),
-
-        orderAmount:
-          order.amount,
-
-        companyVerificationPassed:
-          order.verification.passed,
-
-        stockCheckPassed:
-          order.stockCheck.passed,
-
-        companyPastOrderCount:
-          company.get(
-            "pastOrderCount"
-          ) ?? 0,
-
-        companyDisputeCount:
-          company.get(
-            "disputeCount"
-          ) ?? 0,
-
-        farmerPastOrderCount:
-          farmer.get(
-            "pastOrderCount"
-          ) ?? 0,
-
-        farmerDisputeCount:
-          farmer.get(
-            "disputeCount"
-          ) ?? 0,
-      }
-    );
-
-    /*
-     * Wallet validation.
-     */
-    if (
-      !company.walletAddress ||
-      !farmer.walletAddress
-    ) {
-      throw new Error(
-        "Missing wallet address for company or farmer"
-      );
+    if (!company.walletAddress || !farmer.walletAddress) {
+      throw new Error("Missing wallet address for company or farmer");
     }
 
+    await axios.post(`${AGENTS_URL}/escrow/check-fraud`, {
+      orderId: order.id,
+      companyId: order.companyId.toString(),
+      farmerId: order.farmerId.toString(),
+      orderAmount: order.amount,
+      companyVerificationPassed: order.verification.passed,
+      stockCheckPassed: order.stockCheck.passed,
+      companyPastOrderCount: company.get("pastOrderCount") ?? 0,
+      companyDisputeCount: company.get("disputeCount") ?? 0,
+      farmerPastOrderCount: farmer.get("pastOrderCount") ?? 0,
+      farmerDisputeCount: farmer.get("disputeCount") ?? 0,
+    });
+
     /*
-     * Confirm order on chain.
+     * IMPORTANT: must run before logEscrowFundedOnChain.
+     * OrderLog.sol requires the order to be confirmed before
+     * escrow can be funded.
      */
-    const {
-      txHash: confirmedTxHash,
-    } =
-      await logConfirmedOrderOnChain({
-        orderId: order.id,
+    const { txHash: confirmedTxHash } = await logConfirmedOrderOnChain({
+      orderId: order.id,
+      companyAddr: company.walletAddress,
+      farmerAddr: farmer.walletAddress,
+      cropName: order.cropName,
+      quantity: order.quantity,
+      amount: order.amount,
+    });
+    order.chainTxHash = confirmedTxHash;
 
-        companyAddr:
-          company.walletAddress,
-
-        farmerAddr:
-          farmer.walletAddress,
-
-        cropName:
-          order.cropName,
-
-        quantity:
-          order.quantity,
-
-        amount:
-          order.amount,
-      });
-
-    order.chainTxHash =
-      confirmedTxHash;
+    const { txHash: escrowTxHash } = await logEscrowFundedOnChain({
+      orderId: order.id,
+      razorpayOrderId,
+      razorpayPaymentId,
+      amountPaidPaise: order.escrow.amountPaidPaise!,
+    });
+    order.escrow.escrowChainTxHash = escrowTxHash;
 
     await order.save();
+    await createShipmentForOrder(order, farmer);
 
-    /*
-     * Generate invoice + release shipment.
-     */
-    const result =
-      await generateInvoiceAndReleaseShipmentTranche(
-        order
-      );
+    const result = await generateInvoiceAndReleaseShipmentTranche(order);
 
-    return res.json({
-      success: true,
-      order: result,
-      routedToAdmin: false,
-    });
+    return res.json({ success: true, order: result, routedToAdmin: false });
   } catch (error: any) {
-    console.error(
-      "verifyPayment error:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      error:
-        error.message ||
-        "Server error",
-    });
+    return sendError(res, error);
   }
 }
 
 /* ============================================================
-   GENERATE INVOICE
+   GENERATE INVOICE + RELEASE SHIPMENT TRANCHE
 ============================================================ */
 
-export async function generateInvoiceAndReleaseShipmentTranche(
-  order: any
-) {
-  const [company, farmer] =
-    await Promise.all([
-      Company.findById(
-        order.companyId
-      ),
-      Farmer.findById(
-        order.farmerId
-      ),
-    ]);
+export async function generateInvoiceAndReleaseShipmentTranche(order: any) {
+  const [company, farmer] = await Promise.all([
+    Company.findById(order.companyId),
+    Farmer.findById(order.farmerId),
+  ]);
 
   if (!company || !farmer) {
-    throw new Error(
-      "Company or farmer not found"
-    );
+    throw new Error("Company or farmer not found");
   }
 
-  const SHIPMENT_PERCENT = 10;
-  const DELIVERY_PERCENT = 90;
+  const invoiceNumber = `AH-INV-${order.id.slice(-8).toUpperCase()}`;
+  const qrToken = generateQrToken();
+  const verifyUrl = `${BASE_URL}/api/public/verify/${order.id}/${qrToken}`;
+  const qrCodeDataUrl = await generateQrCodeDataUrl(order.id, qrToken);
 
-  const invoiceNumber =
-    `AH-INV-${order.id
-      .slice(-8)
-      .toUpperCase()}`;
+  const invoiceRes = await axios.post(`${AGENTS_URL}/escrow/generate-invoice`, {
+    orderId: order.id,
+    invoiceNumber,
+    companyName: company.name,
+    companyGstNumber: order.verification?.gstNumber,
+    farmerName: farmer.name,
+    farmerLocation: farmer.address ?? "N/A",
+    cropName: order.cropName,
+    quantity: order.quantity,
+    unit: "kg",
+    cropSubtotal: order.amount,
+    platformFeePercent: order.fees.platformFeePercent,
+    platformFeeAmount: order.fees.platformFeeAmount,
+    transportationFeeAmount: order.fees.transportationFeeAmount,
+    gstOnFeesPercent: order.fees.gstOnFeesPercent,
+    gstOnFeesAmount: order.fees.gstOnFeesAmount,
+    grandTotal: order.fees.grandTotal,
+    shipmentTranchePercent: SHIPMENT_PERCENT,
+    deliveryTranchePercent: DELIVERY_PERCENT,
+    verifyUrl,
+  });
 
-  const qrToken =
-    generateQrToken();
-
-  const baseUrl =
-    process.env.PUBLIC_APP_URL ||
-    "http://localhost:8000";
-
-  const verifyUrl =
-    `${baseUrl}/api/public/verify/${order.id}/${qrToken}`;
-
-  const qrCodeDataUrl =
-    await generateQrCodeDataUrl(
-      order.id,
-      qrToken
-    );
-
-  /*
-   * Generate invoice through agent.
-   */
-  const invoiceRes =
-    await axios.post(
-      `${AGENTS_URL}/escrow/generate-invoice`,
-      {
-        orderId: order.id,
-
-        invoiceNumber,
-
-        companyName:
-          company.name,
-
-        companyGstNumber:
-          order.verification
-            ?.gstNumber,
-
-        farmerName:
-          farmer.name,
-
-        farmerLocation:
-          farmer.address ??
-          "N/A",
-
-        cropName:
-          order.cropName,
-
-        quantity:
-          order.quantity,
-
-        unit: "kg",
-
-        cropSubtotal:
-          order.amount,
-
-        platformFeePercent:
-          order.fees
-            .platformFeePercent,
-
-        platformFeeAmount:
-          order.fees
-            .platformFeeAmount,
-
-        transportationFeeAmount:
-          order.fees
-            .transportationFeeAmount,
-
-        gstOnFeesPercent:
-          order.fees
-            .gstOnFeesPercent,
-
-        gstOnFeesAmount:
-          order.fees
-            .gstOnFeesAmount,
-
-        grandTotal:
-          order.fees
-            .grandTotal,
-
-        shipmentTranchePercent:
-          SHIPMENT_PERCENT,
-
-        deliveryTranchePercent:
-          DELIVERY_PERCENT,
-
-        verifyUrl,
-      }
-    );
-
-  /*
-   * Store invoice.
-   */
   order.invoice = {
     invoiceNumber,
-
-    invoiceText:
-      invoiceRes.data
-        .invoiceText,
-
-    invoicePdfBase64:
-      invoiceRes.data
-        .pdfBase64,
-
-    generatedAt:
-      new Date(),
-
+    invoiceText: invoiceRes.data.invoiceText,
+    invoicePdfBase64: invoiceRes.data.pdfBase64,
+    generatedAt: new Date(),
     qrToken,
-
     qrCodeDataUrl,
   };
 
-  /*
-   * Create tranches.
-   */
   order.tranches = [
     {
       type: "shipment",
-
-      percent:
-        SHIPMENT_PERCENT,
-
-      amount:
-        order.amount *
-        (SHIPMENT_PERCENT / 100),
-
+      percent: SHIPMENT_PERCENT,
+      amount: order.amount * (SHIPMENT_PERCENT / 100),
       status: "pending",
     },
-
     {
       type: "delivery",
-
-      percent:
-        DELIVERY_PERCENT,
-
-      amount:
-        order.amount *
-        (DELIVERY_PERCENT / 100),
-
+      percent: DELIVERY_PERCENT,
+      amount: order.amount * (DELIVERY_PERCENT / 100),
       status: "pending",
     },
   ];
 
-  /*
-   * Release shipment tranche.
-   */
-  await releaseTranche(
-    order,
-    "shipment"
-  );
-
-  order.status =
-    "shipment_released";
-
+  await releaseTranche(order, "shipment");
+  order.status = "shipment_released";
   await order.save();
 
-  const shipmentTranche =
-    order.tranches.find(
-      (t: any) =>
-        t.type === "shipment"
-    );
+  const shipmentTranche = order.tranches.find((t: any) => t.type === "shipment");
 
-  /*
-   * Persistent farmer notification.
-   */
   const notifyText =
     `💰 Payment received for ${order.cropName} (${order.quantity} kg). ` +
     `Invoice ${invoiceNumber} generated. ` +
-    `₹${shipmentTranche?.amount?.toLocaleString(
-      "en-IN"
-    )} (${SHIPMENT_PERCENT}% shipment tranche) ` +
+    `₹${shipmentTranche?.amount?.toLocaleString("en-IN")} (${SHIPMENT_PERCENT}% shipment tranche) ` +
     `has been released to your account — you can start shipment.`;
 
-  const notifyMessage =
-    await Message.create({
-      senderId:
-        order.companyId.toString(),
+  const notifyMessage = await Message.create({
+    senderId: order.companyId.toString(),
+    senderType: "company",
+    receiverId: order.farmerId.toString(),
+    receiverType: "farmer",
+    text: notifyText,
+    orderId: order._id,
+  });
 
-      senderType: "company",
+  emitToUser(order.farmerId.toString(), "farmer", "receive_message", notifyMessage);
+  emitToUser(order.companyId.toString(), "company", "receive_message", notifyMessage);
 
-      receiverId:
-        order.farmerId.toString(),
+  emitToUser(order.farmerId.toString(), "farmer", "unread:update", {
+    senderId: order.companyId.toString(),
+    senderType: "company",
+  });
 
-      receiverType: "farmer",
+  emitToUser(order.farmerId.toString(), "farmer", "order:payment_received", {
+    orderId: order.id,
+    message: `Payment received. ${SHIPMENT_PERCENT}% transferred to your account — start shipment.`,
+    invoiceNumber,
+  });
 
-      text: notifyText,
-
-      /*
-       * If your Message schema supports orderId,
-       * this makes the message clickable too.
-       */
-      orderId: order._id,
-    });
-
-  /*
-   * Socket events.
-   */
-  emitToUser(
-    order.farmerId.toString(),
-    "farmer",
-    "receive_message",
-    notifyMessage
-  );
-
-  emitToUser(
-    order.companyId.toString(),
-    "company",
-    "receive_message",
-    notifyMessage
-  );
-
-  emitToUser(
-    order.farmerId.toString(),
-    "farmer",
-    "unread:update",
-    {
-      senderId:
-        order.companyId.toString(),
-
-      senderType: "company",
-    }
-  );
-
-  emitToUser(
-    order.farmerId.toString(),
-    "farmer",
-    "order:payment_received",
-    {
-      orderId: order.id,
-
-      message:
-        `Payment received. ${SHIPMENT_PERCENT}% transferred to your account — start shipment.`,
-
-      invoiceNumber,
-    }
-  );
-
-  emitToUser(
-    order.companyId.toString(),
-    "company",
-    "order:invoice_ready",
-    {
-      orderId: order.id,
-      invoiceNumber,
-    }
-  );
+  emitToUser(order.companyId.toString(), "company", "order:invoice_ready", {
+    orderId: order.id,
+    invoiceNumber,
+  });
 
   return order;
 }
@@ -699,53 +347,22 @@ export async function generateInvoiceAndReleaseShipmentTranche(
    RELEASE TRANCHE
 ============================================================ */
 
-export async function releaseTranche(
-  order: any,
-  type:
-    | "shipment"
-    | "delivery"
-) {
-  const tranche =
-    order.tranches?.find(
-      (t: any) =>
-        t.type === type
-    );
-
-  if (
-    !tranche ||
-    tranche.status === "released"
-  ) {
+export async function releaseTranche(order: any, type: "shipment" | "delivery") {
+  const tranche = order.tranches?.find((t: any) => t.type === type);
+  if (!tranche || tranche.status === "released") {
     return order;
   }
 
-  const {
-    logTrancheReleasedOnChain,
-  } =
-    await import(
-      "./orderController"
-    );
+  const { txHash } = await logTrancheReleasedOnChain({
+    orderId: order.id,
+    type,
+    percent: tranche.percent,
+    amount: tranche.amount,
+  });
 
-  const { txHash } =
-    await logTrancheReleasedOnChain({
-      orderId: order.id,
-
-      type,
-
-      percent:
-        tranche.percent,
-
-      amount:
-        tranche.amount,
-    });
-
-  tranche.status =
-    "released";
-
-  tranche.releasedAt =
-    new Date();
-
-  tranche.chainTxHash =
-    txHash;
+  tranche.status = "released";
+  tranche.releasedAt = new Date();
+  tranche.chainTxHash = txHash;
 
   return order;
 }
