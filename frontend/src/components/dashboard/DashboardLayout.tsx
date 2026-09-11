@@ -231,15 +231,16 @@ export default function DashboardLayout({
           </main>
 
           {/* =========================
-              RIGHT AYURMATE PANEL
-          ========================== */}
-          {sidePanel && (
-            <aside className="hidden h-full w-[360px] shrink-0 xl:block">
-              <div className="h-full overflow-hidden rounded-[28px] border border-white/70 bg-white/80 shadow-[0_20px_60px_rgba(54,91,63,0.10)] backdrop-blur-xl">
-                {sidePanel}
-              </div>
-            </aside>
-          )}
+    RIGHT AYURMATE PANEL
+    HOME PAGE ONLY
+========================== */}
+{sidePanel && location.pathname === "/farmer-dashboard" && (
+  <aside className="hidden h-full w-[360px] shrink-0 xl:block">
+    <div className="h-full overflow-hidden rounded-[28px] border border-white/70 bg-white/80 shadow-[0_20px_60px_rgba(54,91,63,0.10)] backdrop-blur-xl">
+      {sidePanel}
+    </div>
+  </aside>
+)}
 
         </div>
       </div>
