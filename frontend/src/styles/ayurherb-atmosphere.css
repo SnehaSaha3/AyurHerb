@@ -1,0 +1,183 @@
+/* =========================================================
+   AYURHERB STATIC FIELD BACKGROUND
+   Uses the exact field.jpeg image.
+   No animation.
+   ========================================================= */
+
+.ayurherb-dashboard {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #edf4ed;
+}
+
+
+/* =========================================================
+   BACKGROUND LAYER
+   ========================================================= */
+
+.ayurherb-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   ACTUAL FIELD IMAGE
+   ========================================================= */
+
+.ayurherb-field-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+
+  height: 430px;
+
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-size: cover;
+
+  opacity: 0.82;
+}
+
+
+/* =========================================================
+   SOFT WHITE FADE
+
+   Keeps the field visible around the header while
+   gradually returning the lower dashboard to a soft
+   background like the reference.
+   ========================================================= */
+
+.ayurherb-field-fade {
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(248, 252, 248, 0.02) 0%,
+      rgba(248, 252, 248, 0.08) 25%,
+      rgba(248, 252, 248, 0.48) 48%,
+      rgba(242, 248, 242, 0.88) 67%,
+      rgba(239, 246, 239, 0.98) 100%
+    );
+}
+
+
+/* =========================================================
+   GLASSMORPHISM BASE
+   ========================================================= */
+
+.ayurherb-dashboard
+  .bg-white\/95,
+.ayurherb-dashboard
+  .bg-white\/88,
+.ayurherb-dashboard
+  .bg-white\/84,
+.ayurherb-dashboard
+  .bg-white\/82,
+.ayurherb-dashboard
+  .bg-white\/80 {
+  background-color: rgba(255, 255, 255, 0.56) !important;
+}
+
+
+/* =========================================================
+   AYURMATE
+
+   The wrapper is glass, and common solid-white elements
+   inside the existing AyurMate UI are made translucent.
+   ========================================================= */
+
+.ayurmate-glass {
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+
+/*
+ * Only affects white elements INSIDE AyurMate.
+ * This lets the existing AyurMate layout remain intact.
+ */
+
+.ayurmate-glass [class*="bg-white"] {
+  background-color: rgba(255, 255, 255, 0.48) !important;
+}
+
+
+/* =========================================================
+   GLASS BORDERS
+   ========================================================= */
+
+.ayurherb-dashboard
+  .border-\[\#e3ebe0\],
+.ayurherb-dashboard
+  .border-\[\#dfeade\] {
+  border-color: rgba(255, 255, 255, 0.68) !important;
+}
+
+
+/* =========================================================
+   SOFT INNER GLASS AREAS
+   ========================================================= */
+
+.ayurherb-dashboard
+  .bg-\[\#fafcf9\] {
+  background-color: rgba(255, 255, 255, 0.34) !important;
+}
+
+.ayurherb-dashboard
+  .bg-\[\#f6faf4\] {
+  background-color: rgba(245, 251, 245, 0.42) !important;
+}
+
+.ayurherb-dashboard
+  .bg-\[\#eef3ec\] {
+  background-color: rgba(238, 245, 238, 0.48) !important;
+}
+
+.ayurherb-dashboard
+  .bg-\[\#eef4fb\] {
+  background-color: rgba(238, 244, 251, 0.58) !important;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 1023px) {
+  .ayurherb-field-image {
+    height: 360px;
+  }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 640px) {
+  .ayurherb-field-image {
+    height: 330px;
+    background-position: center top;
+  }
+
+  .ayurherb-field-fade {
+    background:
+      linear-gradient(
+        to bottom,
+        rgba(248, 252, 248, 0.04) 0%,
+        rgba(248, 252, 248, 0.28) 32%,
+        rgba(242, 248, 242, 0.82) 58%,
+        rgba(239, 246, 239, 0.98) 100%
+      );
+  }
+}

@@ -11,7 +11,7 @@ import FarmerDashboard from "./components/dashboard/FarmerDashboard";
 import Profile from "./components/pages/FarmerProfile";
 import CropList from "./components/pages/CropList";
 import CropMap from "./components/maps/CropMap";
-import Home from "./components/pages/FarmerHome";
+import Home from "./components/farmer/FarmerHome";
 import About from "./components/pages/About";
 import CompanyHome from "./components/dashboard/CompanyHome"
 import CompanyDashboard from "./components/dashboard/CompanyDashboard"
