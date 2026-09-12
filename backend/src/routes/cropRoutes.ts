@@ -3,6 +3,7 @@ import Farmer from "../models/farmer";
 import { Crop } from "../models/crop";
 import {
   upsertCropOnChain,
+  updateCropOnChain,
   getAllCropsFromChain,
   getFarmerCropsFromChain,
 } from "../controllers/cropController";
@@ -10,6 +11,106 @@ import { authMiddleware } from "../middlewares/authMiddleware";
 
 const router = Router();
 
+interface FormattedCrop {
+  cropId: string;
+  cropName: string;
+  soilType: string;
+  season: string;
+  area?: string | number;
+  quantity?: number;
+  location: { lat: number; lng: number };
+  source: string;
+  farmerName: string;
+  farmerId: any;
+}
+
+function formatOnChainCrop(
+  c: { id: number; name: string; area: string; season: string; soil: string; lat: number; lng: number },
+  farmerName: string,
+  farmerId: any
+): FormattedCrop {
+  return {
+    cropId: c.id?.toString() || "",
+    cropName: c.name || "🌱 Unknown",
+    soilType: c.soil || "-",
+    season: c.season || "-",
+    area: c.area,
+    location: { lat: c.lat, lng: c.lng },
+    source: "Blockchain",
+    farmerName,
+    farmerId,
+  };
+}
+
+function formatOffChainCrop(c: any, farmerName: string, farmerId: any): FormattedCrop {
+  return {
+    cropId: c.cropId ?? "",
+    cropName: c.cropName ?? "🌱 Unknown",
+    soilType: c.soilType ?? "-",
+    season: c.season ?? "-",
+    quantity: c.quantity ?? 0,
+    location: c.location ?? { lat: 0, lng: 0 },
+    source: "MongoDB",
+    farmerName,
+    farmerId,
+  };
+}
+
+/*
+ * A single physical crop exists as two records: one written on-chain by
+ * addCrop(), one written to Mongo in the same request, sharing a cropId.
+ * That cropId is the real identity join — merge here, once, instead of
+ * sending both records to the client and hoping the frontend can guess
+ * they're the same crop from fields that don't even match (the contract
+ * has no quantity field, so the chain copy never has one).
+ */
+function mergeCropSources(onChain: FormattedCrop[], offChain: FormattedCrop[]): FormattedCrop[] {
+  const byCropId = new Map<string, FormattedCrop>();
+  const unmatched: FormattedCrop[] = [];
+
+  for (const crop of onChain) {
+    if (crop.cropId) {
+      byCropId.set(crop.cropId, crop);
+    } else {
+      unmatched.push(crop);
+    }
+  }
+
+  for (const crop of offChain) {
+    if (!crop.cropId) {
+      unmatched.push(crop);
+      continue;
+    }
+
+    const chainCrop = byCropId.get(crop.cropId);
+
+    if (chainCrop) {
+      // Mongo is the editable copy and the source of truth for every
+      // field it tracks — including location. The chain's lat/lng are
+      // scaled to integers and rounded back on read (parsedLat * 1e6,
+      // then / 1e6), so they can drift from what the farmer's GPS
+      // actually reported. Mongo stores the untouched value, so it
+      // wins here too, not just for the obviously-editable fields.
+      byCropId.set(crop.cropId, {
+        ...chainCrop,
+        cropName: crop.cropName,
+        soilType: crop.soilType,
+        season: crop.season,
+        // Conditional spread instead of `quantity: crop.quantity` —
+        // with exactOptionalPropertyTypes, explicitly assigning
+        // `undefined` to an optional key is a type error even though
+        // omitting the key entirely is fine.
+        ...(crop.quantity !== undefined ? { quantity: crop.quantity } : {}),
+        location: crop.location,
+        source: "Synced",
+      });
+    } else {
+      byCropId.set(crop.cropId, crop);
+    }
+  } // <-- closes the offChain for-loop; this brace was missing
+
+  return [...byCropId.values(), ...unmatched];
+}
 
 router.post("/add", authMiddleware, async (req: any, res: Response) => {
   try {
@@ -47,9 +148,9 @@ router.post("/add", authMiddleware, async (req: any, res: Response) => {
       lng,
     });
 
-   if (cropId === null) {
-  console.warn(`⚠️ upsertCropOnChain returned no cropId for farmer ${farmer._id} — check log parsing`);
-  }
+    if (cropId === null) {
+      console.warn(`upsertCropOnChain returned no cropId for farmer ${farmer._id} — check log parsing`);
+    }
 
     farmer.crops = farmer.crops || [];
     farmer.crops.push(
@@ -108,6 +209,23 @@ router.patch("/:cropId", authMiddleware, async (req: any, res: Response) => {
 
     await farmer.save();
 
+    if (farmer.walletAddress && /^\d+$/.test(cropId)) {
+      try {
+        await updateCropOnChain({
+          cropId: Number(cropId),
+          farmerAddr: farmer.walletAddress,
+          name: crop.cropName,
+          area: "N/A",
+          season: crop.season || "",
+          soil: crop.soilType || "",
+          lat: crop.location?.lat ?? 0,
+          lng: crop.location?.lng ?? 0,
+        });
+      } catch (chainErr: any) {
+        console.error(`Failed to sync crop ${cropId} to chain:`, chainErr.message);
+      }
+    }
+
     res.json({
       success: true,
       crop: {
@@ -125,7 +243,6 @@ router.patch("/:cropId", authMiddleware, async (req: any, res: Response) => {
   }
 });
 
-
 router.get("/mine", authMiddleware, async (req: any, res: Response) => {
   try {
     const farmer = await Farmer.findById(req.user.farmerId);
@@ -137,45 +254,25 @@ router.get("/mine", authMiddleware, async (req: any, res: Response) => {
       });
     }
 
-    let onChainFormatted: any[] = [];
+    let onChainFormatted: FormattedCrop[] = [];
 
     if (farmer.walletAddress) {
       try {
         const onChain = await getFarmerCropsFromChain(farmer.walletAddress);
-
-        onChainFormatted = onChain.map((c) => ({
-          cropId: c.id?.toString() || "",
-          cropName: c.name || "🌱 Unknown",
-          soilType: c.soil || "-",
-          season: c.season || "-",
-          location: { lat: c.lat, lng: c.lng },
-          source: "Blockchain",
-          farmerName: farmer.name,
-          farmerId: farmer._id,
-        }));
+        onChainFormatted = onChain.map((c) => formatOnChainCrop(c, farmer.name, farmer._id));
       } catch (blockErr: any) {
         console.error("Blockchain error:", blockErr.message);
       }
     } else {
-      console.warn("⚠️ farmer has no walletAddress → skipping blockchain");
+      console.warn("farmer has no walletAddress — skipping blockchain");
     }
 
-    const offChain =
-      farmer.crops?.map((c) => ({
-        cropId: c.cropId ?? "",
-        cropName: c.cropName ?? "🌱 Unknown",
-        soilType: c.soilType ?? "-",
-        season: c.season ?? "-",
-        quantity: c.quantity ?? 0,
-        location: c.location ?? { lat: 0, lng: 0 },
-        source: "MongoDB",
-        farmerName: farmer.name,
-        farmerId: farmer._id,
-      })) || [];
+    const offChainFormatted =
+      farmer.crops?.map((c) => formatOffChainCrop(c, farmer.name, farmer._id)) || [];
 
     return res.json({
       success: true,
-      crops: [...onChainFormatted, ...offChain],
+      crops: mergeCropSources(onChainFormatted, offChainFormatted),
     });
   } catch (err: any) {
     console.error("Error in GET /crops/mine:", err);
@@ -186,53 +283,32 @@ router.get("/mine", authMiddleware, async (req: any, res: Response) => {
   }
 });
 
-
 router.get("/:farmerId", async (req: Request, res: Response) => {
   try {
     const farmer = await Farmer.findById(req.params.farmerId);
     if (!farmer)
       return res.status(404).json({ success: false, error: "Farmer not found" });
 
-    let onChainFormatted: any[] = [];
+    let onChainFormatted: FormattedCrop[] = [];
 
     if (farmer.walletAddress) {
       try {
         const onChain = await getFarmerCropsFromChain(farmer.walletAddress);
-        onChainFormatted = onChain.map((c) => ({
-          cropId: c.id?.toString() || "",
-          cropName: c.name || "🌱 Unknown",
-          soilType: c.soil || "-",
-          season: c.season || "-",
-          location: { lat: c.lat, lng: c.lng },
-          source: "Blockchain",
-          farmerName: farmer.name,
-          farmerId: farmer._id,
-        }));
+        onChainFormatted = onChain.map((c) => formatOnChainCrop(c, farmer.name, farmer._id));
       } catch (blockErr: any) {
         console.error("Blockchain error:", blockErr.message);
       }
     }
 
-    const offChain =
-      farmer.crops?.map((c) => ({
-        cropId: c.cropId ?? "",
-        cropName: c.cropName ?? "🌱 Unknown",
-        soilType: c.soilType ?? "-",
-        season: c.season ?? "-",
-        quantity: c.quantity ?? 0,
-        location: c.location ?? { lat: 0, lng: 0 },
-        source: "MongoDB",
-        farmerName: farmer.name,
-        farmerId: farmer._id,
-      })) || [];
+    const offChainFormatted =
+      farmer.crops?.map((c) => formatOffChainCrop(c, farmer.name, farmer._id)) || [];
 
-    res.json({ success: true, crops: [...onChainFormatted, ...offChain] });
+    res.json({ success: true, crops: mergeCropSources(onChainFormatted, offChainFormatted) });
   } catch (err: any) {
     console.error("Error in GET /crops/:farmerId:", err);
     res.status(404).json({ success: false, error: "Farmer not found" });
   }
 });
-
 
 router.get("/", async (_req: Request, res: Response) => {
   try {
@@ -241,59 +317,46 @@ router.get("/", async (_req: Request, res: Response) => {
     try {
       onChain = await getAllCropsFromChain();
     } catch (err) {
-      console.warn("⚠️ Blockchain not running, using only MongoDB");
+      console.warn("Blockchain not running, using only MongoDB");
     }
 
     const farmers = await Farmer.find();
 
-    const walletToFarmer = new Map<string, typeof farmers[number]>();
+    const byFarmer = new Map <
+      string,
+      { farmer: (typeof farmers)[number]; onChain: FormattedCrop[]; offChain: FormattedCrop[] }
+    >();
+
     farmers.forEach((f) => {
-      if (f.walletAddress) {
-        walletToFarmer.set(f.walletAddress.toLowerCase(), f);
-      }
-    });
-
-    const onChainFormatted = onChain.map((c) => {
-      const matchedFarmer = walletToFarmer.get((c.farmer || "").toLowerCase());
-      return {
-        cropId: c.id?.toString() || "",
-        cropName: c.name || "🌱 Unknown",
-        soilType: c.soil || "-",
-        season: c.season || "-",
-        location: { lat: c.lat, lng: c.lng },
-        source: "Blockchain",
-        farmerName: matchedFarmer?.name || "Unknown",
-        farmerId: matchedFarmer?._id || c.farmer,
-      };
-    });
-    const onChainKeys = new Set(
-      onChainFormatted.map((c) => `${c.farmerId}:${c.cropId}`)
-    );
-
-    const offChain: any[] = [];
-    farmers.forEach((f) => {
-      (f.crops ?? []).forEach((c) => {
-        const key = `${f._id}:${c.cropId ?? ""}`;
-        if (onChainKeys.has(key)) return; 
-
-        offChain.push({
-          cropId: c.cropId ?? "",
-          cropName: c.cropName ?? "🌱 Unknown",
-          soilType: c.soilType ?? "-",
-          season: c.season ?? "-",
-          quantity: c.quantity ?? 0,
-          location: c.location ?? { lat: 0, lng: 0 },
-          source: "MongoDB",
-          farmerName: f.name,
-          farmerId: f._id,
-        });
+      byFarmer.set(f._id.toString(), {
+        farmer: f,
+        onChain: [],
+        offChain: (f.crops ?? []).map((c) => formatOffChainCrop(c, f.name, f._id)),
       });
     });
 
-    res.json({
-      success: true,
-      crops: [...onChainFormatted, ...offChain],
+    const walletToFarmerId = new Map<string, string>();
+    farmers.forEach((f) => {
+      if (f.walletAddress) {
+        walletToFarmerId.set(f.walletAddress.toLowerCase(), f._id.toString());
+      }
     });
+
+    onChain.forEach((c) => {
+      const farmerId = walletToFarmerId.get((c.farmer || "").toLowerCase());
+      if (!farmerId) return;
+
+      const entry = byFarmer.get(farmerId);
+      if (!entry) return;
+
+      entry.onChain.push(formatOnChainCrop(c, entry.farmer.name, entry.farmer._id));
+    });
+
+    const crops = Array.from(byFarmer.values()).flatMap((entry) =>
+      mergeCropSources(entry.onChain, entry.offChain)
+    );
+
+    res.json({ success: true, crops });
   } catch (err: any) {
     res.status(500).json({
       success: false,

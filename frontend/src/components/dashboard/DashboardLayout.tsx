@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import {
-  Bell,
   ChevronDown,
+  ChevronRight,
   Home,
   Leaf,
   LogOut,
@@ -16,16 +16,38 @@ import {
   X,
   BarChart3,
   Sparkles,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 import AyurHerbAtmosphere from "./AyurHerbAtmosphere";
 import "../../styles/ayurherb-atmosphere.css";
 
-interface DashboardLayoutProps {
-  sidePanel?: ReactNode;
+interface NavLink {
+  name: string;
+  path: string;
 }
 
-const navigation = [
+interface DashboardLayoutProps {
+  sidePanel?: ReactNode;
+  userType?: string;
+  links?: NavLink[];
+  farmerName?: string;
+  unreadMessages?: number;
+}
+
+const ICON_BY_PATH: Record<string, typeof Home> = {
+  "/farmer-dashboard": Home,
+  "/farmer-dashboard/crops": Leaf,
+  "/farmer-dashboard/geotagged": MapPin,
+  "/farmer-dashboard/shipments": Package,
+  "/farmer-dashboard/recommendations": Sparkles,
+  "/farmer-dashboard/messages": MessageCircle,
+  "/farmer-dashboard/analytics": BarChart3,
+  "/farmer-dashboard/profile": User,
+};
+
+const defaultNavigation = [
   {
     label: "COMMAND",
     items: [
@@ -36,7 +58,6 @@ const navigation = [
       },
     ],
   },
-
   {
     label: "FARM",
     items: [
@@ -47,12 +68,11 @@ const navigation = [
       },
       {
         label: "Geo Tagging",
-        path: "/farmer-dashboard/geo-tagging",
+        path: "/farmer-dashboard/geotagged",
         icon: MapPin,
       },
     ],
   },
-
   {
     label: "BUSINESS",
     items: [
@@ -73,7 +93,6 @@ const navigation = [
       },
     ],
   },
-
   {
     label: "INTELLIGENCE",
     items: [
@@ -88,11 +107,23 @@ const navigation = [
 
 export default function DashboardLayout({
   sidePanel,
+  userType = "Farmer",
+  links,
+  farmerName,
+  unreadMessages = 0,
 }: DashboardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(false);
+
+  const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({
+    COMMAND: true,
+    FARM: true,
+    BUSINESS: true,
+    INTELLIGENCE: true,
+  });
 
   const isActive = (path: string) => {
     if (path === "/farmer-dashboard") {
@@ -102,21 +133,47 @@ export default function DashboardLayout({
     return location.pathname.startsWith(path);
   };
 
+  const toggleGroup = (label: string) => {
+    setOpenGroups((prev) => ({
+      ...prev,
+      [label]: !prev[label],
+    }));
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("farmerToken");
     navigate("/login");
   };
 
+  const navigation = links
+    ? [
+        {
+          label: userType.toUpperCase(),
+          items: links
+            .filter((link) => link.path !== "/farmer-dashboard/profile")
+            .map((link) => ({
+              label: link.name,
+              path: link.path,
+              icon: ICON_BY_PATH[link.path] || Home,
+            })),
+        },
+      ]
+    : defaultNavigation;
+
+  const showAyurMate =
+    Boolean(sidePanel) &&
+    location.pathname === "/farmer-dashboard";
+
   return (
     <div className="ayurherb-dashboard h-screen overflow-hidden">
-      {/* BACKGROUND */}
       <AyurHerbAtmosphere />
 
-      {/* APP SHELL */}
       <div className="relative z-10 h-full">
-        {/* =========================
-            MOBILE MENU
-        ========================== */}
+        {/* =====================================================
+            MOBILE SIDEBAR
+           ===================================================== */}
+
         {mobileOpen && (
           <div className="fixed inset-0 z-[100] lg:hidden">
             <div
@@ -124,283 +181,388 @@ export default function DashboardLayout({
               onClick={() => setMobileOpen(false)}
             />
 
-            <aside className="relative z-10 h-full w-[280px] overflow-hidden border-r border-white/70 bg-white/90 shadow-2xl backdrop-blur-xl">
+            <aside className="relative z-10 h-full w-[280px] overflow-hidden border-r border-white/70 bg-white/75 shadow-2xl backdrop-blur-xl">
               <Sidebar
+                collapsed={false}
+                setCollapsed={setCollapsed}
                 isActive={isActive}
                 navigate={navigate}
                 handleLogout={handleLogout}
+                openGroups={openGroups}
+                toggleGroup={toggleGroup}
                 onClose={() => setMobileOpen(false)}
+                navigation={navigation}
+                userType={userType}
+                farmerName={farmerName}
+                unreadMessages={unreadMessages}
+                mobile
               />
             </aside>
           </div>
         )}
 
-        {/* =========================
-            THREE COLUMN LAYOUT
-        ========================== */}
+        {/* =====================================================
+            MAIN THREE-COLUMN LAYOUT
+           ===================================================== */}
+
         <div className="flex h-full min-h-0 gap-4 p-4 lg:p-5">
 
-          {/* =========================
+          {/* ===================================================
               LEFT SIDEBAR
-          ========================== */}
-          <aside className="hidden h-full w-[245px] shrink-0 lg:block">
-            <div className="h-full overflow-hidden rounded-[28px] border border-white/70 bg-white/80 shadow-[0_20px_60px_rgba(54,91,63,0.10)] backdrop-blur-xl">
+             =================================================== */}
+
+          <aside
+            className={`hidden h-full shrink-0 lg:block ${
+              collapsed ? "w-[82px]" : "w-[245px]"
+            }`}
+          >
+            <div className="h-full overflow-hidden rounded-[28px] border border-white/70 bg-white/55 shadow-[0_20px_60px_rgba(54,91,63,0.10)] backdrop-blur-xl">
               <Sidebar
+                collapsed={collapsed}
+                setCollapsed={setCollapsed}
                 isActive={isActive}
                 navigate={navigate}
                 handleLogout={handleLogout}
+                openGroups={openGroups}
+                toggleGroup={toggleGroup}
+                navigation={navigation}
+                userType={userType}
+                farmerName={farmerName}
+                unreadMessages={unreadMessages}
               />
             </div>
           </aside>
 
-          {/* =========================
-              MIDDLE COLUMN
-          ========================== */}
+          {/* ===================================================
+              CENTER CONTENT
+             =================================================== */}
+
           <main className="flex min-w-0 min-h-0 flex-1 flex-col">
 
-            {/* TOP HEADER */}
-            <header className="mb-4 flex h-[72px] shrink-0 items-center justify-between rounded-[26px] border border-white/70 bg-white/75 px-5 shadow-[0_15px_45px_rgba(54,91,63,0.08)] backdrop-blur-xl">
+            {/* Mobile menu */}
 
-              <div className="flex items-center gap-3">
+            <div className="mb-3 flex shrink-0 lg:hidden">
+              <button
+                onClick={() => setMobileOpen(true)}
+                className="
+                  flex h-11 w-11
+                  items-center justify-center
+                  rounded-2xl
+                  border border-white/70
+                  bg-white/60
+                  text-[#315a40]
+                  shadow-sm
+                  backdrop-blur-xl
+                "
+                aria-label="Open navigation"
+              >
+                <Menu size={21} />
+              </button>
+            </div>
 
-                {/* MOBILE MENU BUTTON */}
-                <button
-                  onClick={() => setMobileOpen(true)}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl text-[#315a40] hover:bg-white/70 lg:hidden"
-                  aria-label="Open menu"
-                >
-                  <Menu size={21} />
-                </button>
+            {/* Routed pages */}
 
-                {/* PAGE TITLE */}
-                <div>
-                  <p className="text-[10px] font-semibold tracking-[0.22em] text-[#829887]">
-                    AYURHERB
-                  </p>
-
-                  <h1 className="text-[16px] font-semibold text-[#173b27]">
-                    Farmer Dashboard
-                  </h1>
-                </div>
-
-              </div>
-
-              {/* PROFILE */}
-              <div className="flex items-center gap-2">
-
-                <button
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#dfeade] bg-white/70 text-[#59705d]"
-                  aria-label="Notifications"
-                >
-                  <Bell size={19} />
-                </button>
-
-                <button className="flex items-center gap-3 rounded-2xl border border-[#dfeade] bg-white/70 px-3 py-2">
-
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e3f3e4] text-xs font-bold text-[#1d8b4a]">
-                    SS
-                  </div>
-
-                  <div className="hidden text-left sm:block">
-                    <p className="text-xs font-semibold text-[#173b27]">
-                      Sneha Saha
-                    </p>
-
-                    <p className="text-[10px] text-[#849685]">
-                      Farmer
-                    </p>
-                  </div>
-
-                  <ChevronDown
-                    size={15}
-                    className="text-[#708271]"
-                  />
-
-                </button>
-
-              </div>
-            </header>
-
-            {/* =========================
-                ONLY THIS AREA SCROLLS
-            ========================== */}
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1 scrollbar-thin">
               <Outlet />
             </div>
-
           </main>
 
-          {/* =========================
-    RIGHT AYURMATE PANEL
-    HOME PAGE ONLY
-========================== */}
-{sidePanel && location.pathname === "/farmer-dashboard" && (
-  <aside className="hidden h-full w-[360px] shrink-0 xl:block">
-    <div className="h-full overflow-hidden rounded-[28px] border border-white/70 bg-white/80 shadow-[0_20px_60px_rgba(54,91,63,0.10)] backdrop-blur-xl">
-      {sidePanel}
-    </div>
-  </aside>
-)}
+          {/* ===================================================
+              RIGHT AYURMATE PANEL
+             =================================================== */}
 
+          {showAyurMate && (
+            <aside className="hidden h-full w-[360px] shrink-0 xl:block">
+              <div className="h-full overflow-hidden rounded-[28px] border border-white/70 bg-white/55 shadow-[0_20px_60px_rgba(54,91,63,0.10)] backdrop-blur-xl">
+                {sidePanel}
+              </div>
+            </aside>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-
 /* =========================================================
    SIDEBAR
-========================================================= */
+   ========================================================= */
+
+interface NavItem {
+  label: string;
+  path: string;
+  icon: typeof Home;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
 
 function Sidebar({
+  collapsed,
+  setCollapsed,
   isActive,
   navigate,
   handleLogout,
+  openGroups,
+  toggleGroup,
+  navigation,
+  userType,
+  farmerName,
+  unreadMessages,
   onClose,
+  mobile = false,
 }: {
+  collapsed: boolean;
+  setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   isActive: (path: string) => boolean;
   navigate: (path: string) => void;
   handleLogout: () => void;
+  openGroups: Record<string, boolean>;
+  toggleGroup: (label: string) => void;
+  navigation: NavGroup[];
+  userType: string;
+  farmerName?: string;
+  unreadMessages: number;
   onClose?: () => void;
+  mobile?: boolean;
 }) {
   return (
-    <div className="relative flex h-full min-h-0 flex-col px-4 py-5">
+    <div className="relative flex h-full min-h-0 flex-col px-3 py-5">
 
-      {/* BRAND */}
-      <div className="flex shrink-0 items-center gap-3 px-2">
+      {/* =====================================================
+          LOGO
+         ===================================================== */}
 
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#168443] text-white shadow-[0_8px_20px_rgba(22,132,67,0.20)]">
+      <div
+        className={`flex shrink-0 items-center ${
+          collapsed ? "justify-center" : "gap-3 px-2"
+        }`}
+      >
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#168443] text-white shadow-[0_8px_20px_rgba(22,132,67,0.20)]">
           <Leaf size={23} strokeWidth={2} />
         </div>
 
-        <div>
-          <h2 className="text-[17px] font-bold text-[#173b27]">
-            AyurHerb
-          </h2>
+        {!collapsed && (
+          <div className="min-w-0">
+            <h2 className="truncate text-[17px] font-bold text-[#173b27]">
+              {farmerName || "AyurHerb"}
+            </h2>
 
-          <p className="text-[9px] font-semibold tracking-[0.2em] text-[#829887]">
-            FARMER WORKSPACE
-          </p>
-        </div>
+            <p className="text-[9px] font-semibold tracking-[0.2em] text-[#829887]">
+              {userType.toUpperCase()} WORKSPACE
+            </p>
+          </div>
+        )}
 
-        {onClose && (
+        {/* Mobile close */}
+
+        {mobile && (
           <button
             onClick={onClose}
-            className="ml-auto rounded-xl p-2 text-[#617665]"
+            className="ml-auto rounded-xl p-2 text-[#617665] hover:bg-white/70"
             aria-label="Close menu"
           >
             <X size={18} />
           </button>
         )}
 
+        {/* Desktop collapse */}
+
+        {!mobile && !collapsed && (
+          <button
+            onClick={() => setCollapsed(true)}
+            className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#708271] hover:bg-white/70"
+            aria-label="Collapse navigation"
+            title="Collapse navigation"
+          >
+            <PanelLeftClose size={18} />
+          </button>
+        )}
+
+        {/* Desktop expand */}
+
+        {!mobile && collapsed && (
+          <button
+            onClick={() => setCollapsed(false)}
+            className="absolute right-2 top-5 flex h-9 w-9 items-center justify-center rounded-xl text-[#708271] hover:bg-white/70"
+            aria-label="Expand navigation"
+            title="Expand navigation"
+          >
+            <PanelLeftOpen size={18} />
+          </button>
+        )}
       </div>
 
+      {/* =====================================================
+          NAVIGATION
+         ===================================================== */}
 
-      {/* NAVIGATION */}
       <div className="mt-7 min-h-0 flex-1 overflow-y-auto">
+        {navigation.map((group) => {
+          const groupOpen = openGroups[group.label] ?? true;
 
-        {navigation.map((group) => (
-          <div
-            key={group.label}
-            className="mb-7"
-          >
+          return (
+            <div key={group.label} className="mb-4">
 
-            <p className="mb-3 px-2 text-[10px] font-bold tracking-[0.2em] text-[#91a293]">
-              {group.label}
-            </p>
+              {!collapsed ? (
+                <button
+                  onClick={() => toggleGroup(group.label)}
+                  className="mb-2 flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-white/40"
+                >
+                  <span className="text-[10px] font-bold tracking-[0.2em] text-[#91a293]">
+                    {group.label}
+                  </span>
 
-            <div className="space-y-1">
-
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.path);
-
-                return (
-                  <button
-                    key={item.path}
-                    onClick={() => {
-                      navigate(item.path);
-                      onClose?.();
-                    }}
-                    className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-none ${
-                      active
-                        ? "bg-[#e8f4e7] font-semibold text-[#148344]"
-                        : "text-[#607363] hover:bg-white/70"
+                  <ChevronDown
+                    size={14}
+                    className={`text-[#91a293] transition-transform ${
+                      groupOpen ? "" : "-rotate-90"
                     }`}
-                  >
-                    <Icon
-                      size={19}
-                      strokeWidth={1.7}
-                      className={
-                        active
-                          ? "text-[#148344]"
-                          : "text-[#78917d]"
-                      }
-                    />
+                  />
+                </button>
+              ) : (
+                <div className="mb-2 flex justify-center">
+                  <div className="h-px w-7 bg-[#dce8dc]" />
+                </div>
+              )}
 
-                    <span>
-                      {item.label}
-                    </span>
+              {groupOpen && (
+                <div className="space-y-1">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const active = isActive(item.path);
+                    const isMessages = item.path.endsWith("/messages");
+                    const showBadge =
+                      isMessages && unreadMessages > 0;
 
-                  </button>
-                );
-              })}
+                    return (
+                      <button
+                        key={item.path}
+                        onClick={() => {
+                          navigate(item.path);
+                          onClose?.();
+                        }}
+                        title={collapsed ? item.label : undefined}
+                        className={`group relative flex w-full items-center rounded-xl py-2.5 text-sm ${
+                          collapsed
+                            ? "justify-center px-2"
+                            : "gap-3 px-3"
+                        } ${
+                          active
+                            ? "bg-[#e8f4e7] font-semibold text-[#148344]"
+                            : "text-[#607363] hover:bg-white/65"
+                        }`}
+                      >
+                        <span className="relative shrink-0">
+                          <Icon
+                            size={19}
+                            strokeWidth={1.7}
+                            className={
+                              active
+                                ? "text-[#148344]"
+                                : "text-[#78917d]"
+                            }
+                          />
 
+                          {showBadge && collapsed && (
+                            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#e5484d] px-1 text-[9px] font-bold text-white">
+                              {unreadMessages > 9
+                                ? "9+"
+                                : unreadMessages}
+                            </span>
+                          )}
+                        </span>
+
+                        {!collapsed && (
+                          <>
+                            <span className="truncate">
+                              {item.label}
+                            </span>
+
+                            {showBadge && (
+                              <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#e5484d] px-1.5 text-[10px] font-bold text-white">
+                                {unreadMessages > 99
+                                  ? "99+"
+                                  : unreadMessages}
+                              </span>
+                            )}
+
+                            {!showBadge && active && (
+                              <ChevronRight
+                                size={13}
+                                className="ml-auto text-[#8aae91]"
+                              />
+                            )}
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+          );
+        })}
+      </div>
 
-          </div>
-        ))}
+      {/* =====================================================
+          PROFILE / LOGOUT
+         ===================================================== */}
 
-
-        <div className="mb-5 border-t border-[#dce8dc]" />
-
-
-        {/* PROFILE */}
+      <div className="shrink-0 border-t border-[#dce8dc] pt-3">
         <button
-          onClick={() =>
-            navigate("/farmer-dashboard/profile")
-          }
-          className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
+          onClick={() => {
+            navigate("/farmer-dashboard/profile");
+            onClose?.();
+          }}
+          title={collapsed ? "Profile" : undefined}
+          className={`mb-1 flex w-full items-center rounded-xl py-2.5 text-sm ${
+            collapsed ? "justify-center px-2" : "gap-3 px-3"
+          } ${
             isActive("/farmer-dashboard/profile")
               ? "bg-[#e8f4e7] font-semibold text-[#148344]"
-              : "text-[#607363]"
+              : "text-[#607363] hover:bg-white/65"
           }`}
         >
           <User
             size={19}
             strokeWidth={1.7}
+            className="shrink-0"
           />
 
-          Profile
+          {!collapsed && <span>Profile</span>}
         </button>
 
-
-        {/* SIGN OUT */}
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-[#607363]"
+          title={collapsed ? "Sign out" : undefined}
+          className={`flex w-full items-center rounded-xl py-2.5 text-sm text-[#607363] hover:bg-white/65 ${
+            collapsed ? "justify-center px-2" : "gap-3 px-3"
+          }`}
         >
           <LogOut
             size={19}
             strokeWidth={1.7}
+            className="shrink-0"
           />
 
-          Sign out
+          {!collapsed && <span>Sign out</span>}
         </button>
-
       </div>
 
+      {/* =====================================================
+          FOOTER
+         ===================================================== */}
 
-      {/* FOOTER */}
-      <p className="shrink-0 pt-4 text-center text-[10px] text-[#9aaa9b]">
-        © 2026 AyurHerb
-      </p>
+      {!collapsed && (
+        <p className="shrink-0 pt-4 text-center text-[10px] text-[#9aaa9b]">
+          © 2026 AyurHerb
+        </p>
+      )}
 
-
-      {/* BOTANICAL CORNER */}
       <div className="sidebar-botanical" />
-
     </div>
   );
 }

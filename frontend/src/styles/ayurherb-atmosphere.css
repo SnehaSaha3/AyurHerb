@@ -1,14 +1,21 @@
 /* =========================================================
    AYURHERB STATIC FIELD BACKGROUND
-   Uses the exact field.jpeg image.
-   No animation.
+   Exact field.jpeg
+   Static — no animation
    ========================================================= */
 
 .ayurherb-dashboard {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  background: #edf4ed;
+
+  background:
+    linear-gradient(
+      135deg,
+      #eef6ef 0%,
+      #eaf3ed 45%,
+      #edf4ef 100%
+    );
 }
 
 
@@ -27,6 +34,8 @@
 
 /* =========================================================
    ACTUAL FIELD IMAGE
+   ---------------------------------------------------------
+   contain ensures the exact photograph is never cropped.
    ========================================================= */
 
 .ayurherb-field-image {
@@ -34,31 +43,29 @@
   inset: 0;
 
   background-repeat: no-repeat;
-  background-position: center center;
+  background-position: center top;
   background-size: contain;
 }
 
 
 /* =========================================================
-   SOFT WHITE FADE
-
-   Keeps the field visible around the header while
-   gradually returning the lower dashboard to a soft
-   background like the reference.
+   SOFT ATMOSPHERIC FADE
    ========================================================= */
 
 .ayurherb-field-fade {
   position: absolute;
   inset: 0;
+  pointer-events: none;
 
   background:
     linear-gradient(
       to bottom,
-      rgba(248, 252, 248, 0.02) 0%,
-      rgba(248, 252, 248, 0.08) 25%,
-      rgba(248, 252, 248, 0.48) 48%,
-      rgba(242, 248, 242, 0.88) 67%,
-      rgba(239, 246, 239, 0.98) 100%
+      rgba(238, 247, 240, 0) 0%,
+      rgba(238, 247, 240, 0.02) 22%,
+      rgba(238, 247, 240, 0.10) 45%,
+      rgba(238, 247, 240, 0.28) 68%,
+      rgba(238, 247, 240, 0.58) 88%,
+      rgba(238, 247, 240, 0.76) 100%
     );
 }
 
@@ -77,32 +84,10 @@
   .bg-white\/82,
 .ayurherb-dashboard
   .bg-white\/80 {
-  background-color: rgba(255, 255, 255, 0.56) !important;
-}
-
-
-/* =========================================================
-   AYURMATE
-
-   The wrapper is glass, and common solid-white elements
-   inside the existing AyurMate UI are made translucent.
-   ========================================================= */
-
-.ayurmate-glass {
-  background: rgba(255, 255, 255, 0.48);
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-}
-
-
-/*
- * Only affects white elements INSIDE AyurMate.
- * This lets the existing AyurMate layout remain intact.
- */
-
-.ayurmate-glass [class*="bg-white"] {
   background-color: rgba(255, 255, 255, 0.48) !important;
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 
@@ -124,22 +109,54 @@
 
 .ayurherb-dashboard
   .bg-\[\#fafcf9\] {
-  background-color: rgba(255, 255, 255, 0.34) !important;
+  background-color: rgba(255, 255, 255, 0.30) !important;
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .ayurherb-dashboard
   .bg-\[\#f6faf4\] {
-  background-color: rgba(245, 251, 245, 0.42) !important;
+  background-color: rgba(245, 251, 245, 0.36) !important;
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .ayurherb-dashboard
   .bg-\[\#eef3ec\] {
-  background-color: rgba(238, 245, 238, 0.48) !important;
+  background-color: rgba(238, 245, 238, 0.40) !important;
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .ayurherb-dashboard
   .bg-\[\#eef4fb\] {
-  background-color: rgba(238, 244, 251, 0.58) !important;
+  background-color: rgba(238, 244, 251, 0.46) !important;
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+
+/* =========================================================
+   AYURMATE GLASS
+   ========================================================= */
+
+.ayurmate-glass {
+  background: rgba(255, 255, 255, 0.42);
+
+  border: 1px solid rgba(255, 255, 255, 0.72);
+
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+
+/* Existing white elements inside AyurMate */
+.ayurmate-glass [class*="bg-white"] {
+  background-color: rgba(255, 255, 255, 0.46) !important;
 }
 
 
@@ -149,7 +166,19 @@
 
 @media (max-width: 1023px) {
   .ayurherb-field-image {
-    height: 360px;
+    background-position: center top;
+    background-size: contain;
+  }
+
+  .ayurherb-field-fade {
+    background:
+      linear-gradient(
+        to bottom,
+        rgba(238, 247, 240, 0) 0%,
+        rgba(238, 247, 240, 0.08) 30%,
+        rgba(238, 247, 240, 0.32) 65%,
+        rgba(238, 247, 240, 0.70) 100%
+      );
   }
 }
 
@@ -160,18 +189,18 @@
 
 @media (max-width: 640px) {
   .ayurherb-field-image {
-    height: 330px;
     background-position: center top;
+    background-size: contain;
   }
 
   .ayurherb-field-fade {
     background:
       linear-gradient(
         to bottom,
-        rgba(248, 252, 248, 0.04) 0%,
-        rgba(248, 252, 248, 0.28) 32%,
-        rgba(242, 248, 242, 0.82) 58%,
-        rgba(239, 246, 239, 0.98) 100%
+        rgba(238, 247, 240, 0.02) 0%,
+        rgba(238, 247, 240, 0.12) 28%,
+        rgba(238, 247, 240, 0.42) 58%,
+        rgba(238, 247, 240, 0.78) 100%
       );
   }
 }
