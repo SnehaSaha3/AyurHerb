@@ -16,7 +16,7 @@ export default function ChatbotCard({
   const [messages, setMessages] = useState<Message[]>([
     {
       from: "bot",
-      text: "Hello! I'm AyurMate 🌿 How can I help you today?",
+      text: "This is AyurMate 🌿, Look into your farm today ",
     },
   ]);
 
@@ -124,7 +124,7 @@ export default function ChatbotCard({
           </div>
 
           <p className="text-[11px] text-gray-500">
-            Your farm assistant
+            Your Helping Friend 
           </p>
         </div>
       </div>

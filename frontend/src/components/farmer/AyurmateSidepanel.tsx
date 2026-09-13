@@ -17,7 +17,7 @@ export default function AyurMateSidePanel() {
           </p>
           <h2 className="text-sm font-semibold text-[#16321f]">AyurMate</h2>
           <p className="truncate text-xs text-[#8a9a87]">
-            Your interface for crop intelligence, IoT data and farm agents.
+            Your Helping Friend 
           </p>
         </div>
       </div>
