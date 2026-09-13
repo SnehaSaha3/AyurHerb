@@ -81,6 +81,7 @@ export default function CompanyHome() {
   const navigate = useNavigate();
 
   const [orders, setOrders] = useState<Order[]>([]);
+
   const [stats, setStats] = useState<Stats>({
     activeOrders: 0,
     pendingOrders: 0,
@@ -89,7 +90,8 @@ export default function CompanyHome() {
   });
 
   const [loading, setLoading] = useState(true);
-  const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
+  const [payingOrderId, setPayingOrderId] =
+    useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   const fetchOrders = async () => {
@@ -135,26 +137,31 @@ export default function CompanyHome() {
     fetchOrders();
   }, []);
 
-  /*
-   * Load Razorpay checkout.
-   */
+  /* =========================================================
+     RAZORPAY
+  ========================================================== */
+
   useEffect(() => {
     const scriptId = "razorpay-checkout-script";
 
-    if (document.getElementById(scriptId)) return;
+    if (document.getElementById(scriptId)) {
+      return;
+    }
 
     const script = document.createElement("script");
 
     script.id = scriptId;
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.src =
+      "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
 
     document.body.appendChild(script);
   }, []);
 
-  /*
-   * Orders waiting for company payment.
-   */
+  /* =========================================================
+     DERIVED DATA
+  ========================================================== */
+
   const paymentOrders = useMemo(
     () =>
       orders.filter(
@@ -163,15 +170,13 @@ export default function CompanyHome() {
     [orders]
   );
 
-  /*
-   * Crop demand calculated from REAL orders.
-   */
   const cropDemand = useMemo(() => {
     const demand: Record<string, number> = {};
 
     orders.forEach((order) => {
       demand[order.cropName] =
-        (demand[order.cropName] || 0) + order.quantity;
+        (demand[order.cropName] || 0) +
+        Number(order.quantity || 0);
     });
 
     return Object.entries(demand)
@@ -187,7 +192,8 @@ export default function CompanyHome() {
   const totalQuantity = useMemo(
     () =>
       orders.reduce(
-        (total, order) => total + Number(order.quantity || 0),
+        (total, order) =>
+          total + Number(order.quantity || 0),
         0
       ),
     [orders]
@@ -200,6 +206,10 @@ export default function CompanyHome() {
         .filter(Boolean)
     ).size;
   }, [orders]);
+
+  /* =========================================================
+     PAYMENT
+  ========================================================== */
 
   const startPayment = async (order: Order) => {
     const token = localStorage.getItem("companyToken");
@@ -252,7 +262,6 @@ export default function CompanyHome() {
               {
                 razorpayPaymentId:
                   response.razorpay_payment_id,
-
                 razorpaySignature:
                   response.razorpay_signature,
               },
@@ -276,7 +285,10 @@ export default function CompanyHome() {
 
             await fetchOrders();
           } catch (error: any) {
-            console.error("Payment verification error:", error);
+            console.error(
+              "Payment verification error:",
+              error
+            );
 
             alert(
               error.response?.data?.error ||
@@ -295,7 +307,7 @@ export default function CompanyHome() {
         },
 
         theme: {
-          color: "#16a34a",
+          color: "#1f7a3f",
         },
       });
 
@@ -313,6 +325,10 @@ export default function CompanyHome() {
     }
   };
 
+  /* =========================================================
+     INVOICE
+  ========================================================== */
+
   const openInvoice = (order: Order) => {
     if (!order.invoice?.qrToken) {
       alert("Invoice has not been generated yet.");
@@ -327,114 +343,134 @@ export default function CompanyHome() {
     window.open(url, "_blank");
   };
 
+  /* =========================================================
+     LOADING
+  ========================================================== */
+
   if (loading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <div className="text-sm text-gray-500">
-          Loading company overview...
+      <div className="flex min-h-[420px] items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#dce3dc] border-t-[#2b7442]" />
+
+          <p className="text-xs text-[#8a928c]">
+            Loading company overview...
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-7">
+    <div className="mx-auto w-full max-w-[1380px]">
 
-      {/* HEADER */}
+      {/* =====================================================
+          PAGE HEADER
+      ====================================================== */}
 
-      <div className="rounded-3xl bg-gradient-to-r from-[#183c29] via-[#24613c] to-[#4d8b52] p-7 text-white shadow-sm">
+      <section className="mb-6 flex flex-col gap-4 border-b border-[#e5e8e4] pb-6 sm:mb-7 sm:pb-7 lg:flex-row lg:items-end lg:justify-between">
 
-        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+        <div className="min-w-0">
 
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.15em] text-white/60">
-              Company overview
-            </p>
+          <h1 className="mt-1.5 text-xl font-semibold tracking-tight text-[#303630] sm:text-2xl lg:text-[26px]">
+            Procurement at a glance
+          </h1>
 
-            <h1 className="mt-2 text-2xl font-semibold">
-              Procurement at a glance
-            </h1>
-
-            <p className="mt-2 max-w-xl text-sm text-white/70">
-              Monitor your agricultural supply network,
-              payments and procurement performance.
-            </p>
-          </div>
-
-          <button
-            onClick={() =>
-              navigate("/company-dashboard/orders")
-            }
-            className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-[#205332] transition hover:bg-white/90"
-          >
-            View Orders
-            <ArrowRight size={15} />
-          </button>
-
+          <p className="mt-2 max-w-2xl text-xs leading-5 text-[#858d87] sm:text-sm sm:leading-6">
+            Monitor your agricultural supply network,
+            payments and procurement activity from one
+            workspace.
+          </p>
         </div>
-      </div>
+
+        <button
+          onClick={() =>
+            navigate("/company-dashboard/orders")
+          }
+          className="flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-[#dfe4df] bg-white px-4 py-2.5 text-xs font-medium text-[#3e4740] shadow-sm transition hover:border-[#cbd3cc] hover:bg-[#f8f9f7] sm:w-auto sm:text-sm"
+        >
+          View Orders
+          <ArrowRight size={15} />
+        </button>
+
+      </section>
+
+      {/* =====================================================
+          MESSAGE
+      ====================================================== */}
 
       {message && (
-        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        <div className="mb-5 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-xs text-green-700 sm:text-sm">
           {message}
         </div>
       )}
 
-      {/* STATS */}
+      {/* =====================================================
+          OVERVIEW STATS
+      ====================================================== */}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-7 overflow-hidden rounded-2xl border border-[#e4e8e3] bg-white shadow-sm">
 
-        <StatCard
-          title="Active Orders"
-          value={stats.activeOrders}
-          icon={<Package size={19} />}
-          tone="green"
-        />
+        <div className="grid grid-cols-2 divide-x divide-y divide-[#edf0ec] lg:grid-cols-4 lg:divide-y-0">
 
-        <StatCard
-          title="Pending Orders"
-          value={stats.pendingOrders}
-          icon={<Clock3 size={19} />}
-          tone="amber"
-        />
+          <OverviewStat
+            title="Active Orders"
+            value={stats.activeOrders}
+            icon={<Package size={17} />}
+            tone="green"
+          />
 
-        <StatCard
-          title="Delivered"
-          value={stats.deliveredOrders}
-          icon={<CheckCircle2 size={19} />}
-          tone="purple"
-        />
+          <OverviewStat
+            title="Pending Orders"
+            value={stats.pendingOrders}
+            icon={<Clock3 size={17} />}
+            tone="amber"
+          />
 
-        <StatCard
-          title="Total Spend"
-          value={`₹${stats.totalSpend.toLocaleString("en-IN")}`}
-          icon={<WalletCards size={19} />}
-          tone="blue"
-        />
+          <OverviewStat
+            title="Delivered"
+            value={stats.deliveredOrders}
+            icon={<CheckCircle2 size={17} />}
+            tone="purple"
+          />
 
-      </div>
+          <OverviewStat
+            title="Total Spend"
+            value={`₹${Number(
+              stats.totalSpend || 0
+            ).toLocaleString("en-IN")}`}
+            icon={<WalletCards size={17} />}
+            tone="blue"
+          />
 
-      {/* PAYMENT AREA */}
+        </div>
 
-      <section>
+      </section>
 
-        <div className="mb-4 flex items-end justify-between">
+      {/* =====================================================
+          PAYMENT REQUIRED
+      ====================================================== */}
+
+      <section className="mb-7">
+
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
 
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-gray-800">
+              <h2 className="text-base font-semibold text-[#343a35] sm:text-lg">
                 Payment Required
               </h2>
 
               {paymentOrders.length > 0 && (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-700">
                   {paymentOrders.length}
                 </span>
               )}
             </div>
 
-            <p className="mt-1 text-xs text-gray-500">
-              Orders approved by verification and stock agents.
+            <p className="mt-1 text-[11px] text-[#929a94] sm:text-xs">
+              Orders approved by verification and stock
+              agents.
             </p>
           </div>
 
@@ -443,7 +479,7 @@ export default function CompanyHome() {
               onClick={() =>
                 navigate("/company-dashboard/orders")
               }
-              className="text-xs font-medium text-green-700 hover:text-green-900"
+              className="self-start text-[11px] font-medium text-green-700 hover:text-green-900 sm:text-xs"
             >
               Manage payments →
             </button>
@@ -452,26 +488,25 @@ export default function CompanyHome() {
         </div>
 
         {paymentOrders.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
+          <div className="rounded-2xl border border-dashed border-[#d8ddd8] bg-white px-5 py-10 text-center">
 
-            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-green-50 text-green-600">
-              <CheckCircle2 size={21} />
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-600">
+              <CheckCircle2 size={20} />
             </div>
 
-            <p className="mt-3 text-sm font-medium text-gray-700">
+            <p className="mt-3 text-xs font-medium text-[#59605b] sm:text-sm">
               No payments requiring action
             </p>
 
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-[10px] text-[#a1a7a2] sm:text-xs">
               Agent-approved orders will appear here.
             </p>
 
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="space-y-3">
 
             {paymentOrders.slice(0, 4).map((order) => {
-
               const payable =
                 order.fees?.grandTotal ||
                 order.amount ||
@@ -480,90 +515,92 @@ export default function CompanyHome() {
               return (
                 <motion.div
                   key={order._id}
-                  whileHover={{ y: -2 }}
-                  className="relative overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm"
+                  whileHover={{ y: -1 }}
+                  transition={{ duration: 0.15 }}
+                  className="rounded-2xl border border-amber-200 bg-white shadow-sm"
                 >
+                  <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
 
-                  <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-full bg-amber-50" />
+                    <div className="flex min-w-0 items-center gap-3">
 
-                  <div className="relative p-5">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-700">
+                        <Sprout size={19} />
+                      </div>
 
-                    <div className="flex items-start justify-between gap-4">
-
-                      <div className="flex items-center gap-3">
-
-                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-green-50 text-green-700">
-                          <Sprout size={21} />
-                        </div>
-
-                        <div>
-                          <h3 className="font-semibold text-gray-800">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-sm font-semibold text-[#3c423e]">
                             {order.cropName}
                           </h3>
 
-                          <p className="text-xs text-gray-500">
-                            {order.farmerId?.name ||
-                              "Unknown farmer"}
-                          </p>
+                          <span className="rounded-full bg-amber-100 px-2 py-1 text-[8px] font-semibold text-amber-700">
+                            PAYMENT REQUIRED
+                          </span>
                         </div>
 
+                        <p className="mt-1 truncate text-[11px] text-[#8b928d]">
+                          {order.farmerId?.name ||
+                            "Unknown farmer"}
+                        </p>
                       </div>
-
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-700">
-                        PAYMENT REQUIRED
-                      </span>
 
                     </div>
 
-                    <div className="mt-5 grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-2 lg:flex lg:items-center">
 
-                      <div className="rounded-xl bg-gray-50 p-3">
-                        <p className="text-[10px] uppercase tracking-wide text-gray-400">
+                      <div className="rounded-xl bg-[#f7f8f6] px-4 py-2.5 lg:min-w-[110px]">
+                        <p className="text-[9px] uppercase tracking-wide text-[#a0a6a1]">
                           Quantity
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-gray-700">
+
+                        <p className="mt-0.5 text-xs font-semibold text-[#59605b]">
                           {order.quantity} kg
                         </p>
                       </div>
 
-                      <div className="rounded-xl bg-gray-50 p-3">
-                        <p className="text-[10px] uppercase tracking-wide text-gray-400">
+                      <div className="rounded-xl bg-[#f7f8f6] px-4 py-2.5 lg:min-w-[130px]">
+                        <p className="text-[9px] uppercase tracking-wide text-[#a0a6a1]">
                           Amount
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-gray-700">
-                          ₹{Number(payable).toLocaleString("en-IN")}
+
+                        <p className="mt-0.5 text-xs font-semibold text-[#59605b]">
+                          ₹
+                          {Number(payable).toLocaleString(
+                            "en-IN"
+                          )}
                         </p>
                       </div>
 
+                      <button
+                        onClick={() => startPayment(order)}
+                        disabled={
+                          payingOrderId === order._id
+                        }
+                        className="col-span-2 flex items-center justify-center gap-2 rounded-xl bg-[#1f7a3f] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#176332] disabled:cursor-not-allowed disabled:opacity-50 lg:col-span-1 lg:min-w-[145px]"
+                      >
+                        <WalletCards size={14} />
+
+                        {payingOrderId === order._id
+                          ? "Opening payment..."
+                          : `Pay ₹${Number(
+                              payable
+                            ).toLocaleString("en-IN")}`}
+                      </button>
+
                     </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-
-                      <span className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-medium text-green-700">
-                        <CheckCircle2 size={11} />
-                        Company verified
-                      </span>
-
-                      <span className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-medium text-green-700">
-                        <CheckCircle2 size={11} />
-                        Stock verified
-                      </span>
-
-                    </div>
-
-                    <button
-                      onClick={() => startPayment(order)}
-                      disabled={payingOrderId === order._id}
-                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1f7a3f] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#176332] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <WalletCards size={16} />
-
-                      {payingOrderId === order._id
-                        ? "Opening payment..."
-                        : `Pay ₹${Number(payable).toLocaleString("en-IN")}`}
-                    </button>
 
                   </div>
+
+                  <div className="flex flex-wrap gap-1.5 border-t border-[#f0eee8] px-4 py-3 sm:px-5">
+                    <VerificationBadge>
+                      Company verified
+                    </VerificationBadge>
+
+                    <VerificationBadge>
+                      Stock verified
+                    </VerificationBadge>
+                  </div>
+
                 </motion.div>
               );
             })}
@@ -573,129 +610,167 @@ export default function CompanyHome() {
 
       </section>
 
-      {/* BUSINESS SNAPSHOT */}
+      {/* =====================================================
+          PROCUREMENT OVERVIEW
+      ====================================================== */}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <section className="mb-7 rounded-2xl border border-[#e4e8e3] bg-white shadow-sm">
 
-        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+        <div className="border-b border-[#edf0ec] px-4 py-4 sm:px-6 sm:py-5">
 
-          <div className="flex items-center gap-3">
-
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700">
-              <TrendingUp size={19} />
-            </div>
-
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs text-gray-400">
-                Most ordered crop
-              </p>
+              <h2 className="text-sm font-semibold text-[#3b413d] sm:text-base">
+                Procurement Overview
+              </h2>
 
-              <p className="mt-0.5 font-semibold text-gray-800">
-                {mostOrderedCrop?.crop || "No data yet"}
+              <p className="mt-1 text-[10px] text-[#929a94] sm:text-xs">
+                A summary of your purchasing activity.
               </p>
             </div>
 
+            <button
+              onClick={() =>
+                navigate("/company-dashboard/explore")
+              }
+              className="self-start text-[10px] font-medium text-green-700 hover:text-green-900 sm:text-xs"
+            >
+              Explore farm network →
+            </button>
           </div>
 
-          <div className="mt-5">
-            <p className="text-2xl font-semibold text-gray-800">
+        </div>
+
+        <div className="grid grid-cols-1 divide-y divide-[#edf0ec] md:grid-cols-3 md:divide-x md:divide-y-0">
+
+          {/* Most ordered */}
+
+          <div className="p-5 sm:p-6">
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-700">
+                <TrendingUp size={17} />
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-[10px] text-[#9aa19b]">
+                  Most ordered crop
+                </p>
+
+                <p className="mt-0.5 truncate text-sm font-semibold text-[#3b413d]">
+                  {mostOrderedCrop?.crop ||
+                    "No data yet"}
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-5 text-xl font-semibold tracking-tight text-[#343a35] sm:text-2xl">
               {mostOrderedCrop
-                ? `${mostOrderedCrop.quantity.toLocaleString("en-IN")} kg`
+                ? `${mostOrderedCrop.quantity.toLocaleString(
+                    "en-IN"
+                  )} kg`
                 : "—"}
             </p>
 
-            <p className="mt-1 text-xs text-gray-400">
-              Total ordered quantity
+            <p className="mt-1 text-[10px] text-[#9aa19b]">
+              Ordered quantity
             </p>
+
           </div>
 
-        </div>
+          {/* Procurement volume */}
 
-        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="p-5 sm:p-6">
 
-          <p className="text-xs text-gray-400">
-            Procurement volume
-          </p>
-
-          <p className="mt-2 text-2xl font-semibold text-gray-800">
-            {totalQuantity.toLocaleString("en-IN")} kg
-          </p>
-
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100">
-            <div className="h-full w-[72%] rounded-full bg-green-500" />
-          </div>
-
-          <p className="mt-2 text-xs text-gray-400">
-            Across {orders.length} orders
-          </p>
-
-        </div>
-
-        <div className="rounded-2xl border bg-white p-5 shadow-sm">
-
-          <p className="text-xs text-gray-400">
-            Supplier network
-          </p>
-
-          <p className="mt-2 text-2xl font-semibold text-gray-800">
-            {activeSuppliers}
-          </p>
-
-          <p className="mt-1 text-xs text-gray-400">
-            Farmers involved in procurement
-          </p>
-
-          <button
-            onClick={() =>
-              navigate("/company-dashboard/explore")
-            }
-            className="mt-4 text-xs font-medium text-green-700 hover:text-green-900"
-          >
-            Explore farm network →
-          </button>
-
-        </div>
-
-      </div>
-
-      {/* CROP DEMAND */}
-
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
-
-        <div className="flex items-center justify-between">
-
-          <div>
-            <h2 className="font-semibold text-gray-800">
-              Procurement by Crop
-            </h2>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Crops ordered by your company, based on actual order data.
+            <p className="text-[10px] text-[#9aa19b]">
+              Procurement volume
             </p>
+
+            <p className="mt-2 text-xl font-semibold tracking-tight text-[#343a35] sm:text-2xl">
+              {totalQuantity.toLocaleString("en-IN")} kg
+            </p>
+
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#edf0ec]">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{
+                  width: totalQuantity > 0 ? "100%" : "0%",
+                }}
+                transition={{ duration: 0.7 }}
+                className="h-full rounded-full bg-[#4d8b52]"
+              />
+            </div>
+
+            <p className="mt-2 text-[10px] text-[#9aa19b]">
+              Across {orders.length} orders
+            </p>
+
           </div>
 
-          <button
-            onClick={() =>
-              navigate("/company-dashboard/analytics")
-            }
-            className="text-xs font-medium text-green-700 hover:text-green-900"
-          >
-            Detailed analytics →
-          </button>
+          {/* Supplier network */}
+
+          <div className="p-5 sm:p-6">
+
+            <p className="text-[10px] text-[#9aa19b]">
+              Supplier network
+            </p>
+
+            <p className="mt-2 text-xl font-semibold tracking-tight text-[#343a35] sm:text-2xl">
+              {activeSuppliers}
+            </p>
+
+            <p className="mt-1 text-[10px] text-[#9aa19b]">
+              Farmers involved in procurement
+            </p>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      {/* =====================================================
+          PROCUREMENT BY CROP
+      ====================================================== */}
+
+      <section className="mb-7 rounded-2xl border border-[#e4e8e3] bg-white shadow-sm">
+
+        <div className="border-b border-[#edf0ec] px-4 py-4 sm:px-6 sm:py-5">
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+            <div>
+              <h2 className="text-sm font-semibold text-[#3b413d] sm:text-base">
+                Procurement by Crop
+              </h2>
+
+              <p className="mt-1 text-[10px] text-[#929a94] sm:text-xs">
+                Based on actual order data.
+              </p>
+            </div>
+
+            <button
+              onClick={() =>
+                navigate("/company-dashboard/analytics")
+              }
+              className="self-start text-[10px] font-medium text-green-700 hover:text-green-900 sm:text-xs"
+            >
+              Detailed analytics →
+            </button>
+
+          </div>
 
         </div>
 
         {cropDemand.length === 0 ? (
-          <div className="py-10 text-center text-sm text-gray-400">
+          <div className="px-5 py-12 text-center text-xs text-[#a0a6a1]">
             Order data will appear here.
           </div>
         ) : (
-          <div className="mt-6 space-y-4">
+          <div className="space-y-4 px-4 py-5 sm:px-6 sm:py-6">
 
             {cropDemand.slice(0, 5).map((item, index) => {
-
-              const max =
-                cropDemand[0]?.quantity || 1;
+              const max = cropDemand[0]?.quantity || 1;
 
               const percentage =
                 (item.quantity / max) * 100;
@@ -703,25 +778,25 @@ export default function CompanyHome() {
               return (
                 <div key={item.crop}>
 
-                  <div className="mb-1.5 flex justify-between">
+                  <div className="mb-1.5 flex items-center justify-between gap-4">
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-gray-500">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="w-5 shrink-0 text-[10px] font-medium text-[#a0a6a1]">
                         #{index + 1}
                       </span>
 
-                      <span className="text-sm font-medium text-gray-700">
+                      <span className="truncate text-xs font-medium text-[#59605b] sm:text-sm">
                         {item.crop}
                       </span>
                     </div>
 
-                    <span className="text-xs font-semibold text-gray-600">
+                    <span className="shrink-0 text-[10px] font-semibold text-[#737b75] sm:text-xs">
                       {item.quantity.toLocaleString("en-IN")} kg
                     </span>
 
                   </div>
 
-                  <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div className="h-2 overflow-hidden rounded-full bg-[#eef1ed]">
 
                     <motion.div
                       initial={{ width: 0 }}
@@ -732,7 +807,7 @@ export default function CompanyHome() {
                         duration: 0.6,
                         delay: index * 0.08,
                       }}
-                      className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400"
+                      className="h-full rounded-full bg-[#4d8b52]"
                     />
 
                   </div>
@@ -746,20 +821,22 @@ export default function CompanyHome() {
 
       </section>
 
-      {/* RECENT ACTIVITY */}
+      {/* =====================================================
+          RECENT ACTIVITY
+      ====================================================== */}
 
-      <section className="rounded-2xl border bg-white shadow-sm">
+      <section className="overflow-hidden rounded-2xl border border-[#e4e8e3] bg-white shadow-sm">
 
-        <div className="border-b px-6 py-5">
+        <div className="border-b border-[#edf0ec] px-4 py-4 sm:px-6 sm:py-5">
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
 
-            <div>
-              <h2 className="font-semibold text-gray-800">
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold text-[#3b413d] sm:text-base">
                 Recent Procurement Activity
               </h2>
 
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-[10px] text-[#929a94] sm:text-xs">
                 Latest activity across your orders.
               </p>
             </div>
@@ -768,7 +845,7 @@ export default function CompanyHome() {
               onClick={() =>
                 navigate("/company-dashboard/orders")
               }
-              className="text-xs font-medium text-green-700 hover:text-green-900"
+              className="shrink-0 text-[10px] font-medium text-green-700 hover:text-green-900 sm:text-xs"
             >
               View all →
             </button>
@@ -777,10 +854,9 @@ export default function CompanyHome() {
 
         </div>
 
-        <div className="divide-y">
+        <div className="divide-y divide-[#edf0ec]">
 
           {orders.slice(0, 5).map((order) => {
-
             const amount =
               order.fees?.grandTotal ||
               order.amount ||
@@ -789,54 +865,60 @@ export default function CompanyHome() {
             return (
               <div
                 key={order._id}
-                className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
               >
 
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-center gap-3">
 
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-50 text-green-600">
-                    <Sprout size={17} />
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-50 text-green-600">
+                    <Sprout size={16} />
                   </div>
 
-                  <div>
-
-                    <p className="text-sm font-medium text-gray-700">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-[#59605b] sm:text-sm">
                       {order.cropName}
                     </p>
 
-                    <p className="text-xs text-gray-400">
-                      {order.quantity} kg ·{" "}
+                    <p className="truncate text-[10px] text-[#a0a6a1] sm:text-xs">
+                      {order.quantity} kg
+                      {" · "}
                       {order.farmerId?.name ||
                         "Unknown farmer"}
                     </p>
-
                   </div>
 
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center justify-between gap-3 pl-12 sm:justify-end sm:pl-0">
 
-                  <span className="text-sm font-semibold text-gray-700">
-                    ₹{Number(amount).toLocaleString("en-IN")}
+                  <span className="text-xs font-semibold text-[#59605b] sm:text-sm">
+                    ₹
+                    {Number(amount).toLocaleString(
+                      "en-IN"
+                    )}
                   </span>
 
                   {order.status === "awaiting_payment" ? (
                     <button
                       onClick={() => startPayment(order)}
-                      disabled={payingOrderId === order._id}
-                      className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                      disabled={
+                        payingOrderId === order._id
+                      }
+                      className="rounded-lg bg-green-600 px-3 py-1.5 text-[10px] font-medium text-white transition hover:bg-green-700 disabled:opacity-50 sm:text-xs"
                     >
-                      Pay
+                      {payingOrderId === order._id
+                        ? "..."
+                        : "Pay"}
                     </button>
                   ) : order.invoice ? (
                     <button
                       onClick={() => openInvoice(order)}
-                      className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                      className="rounded-lg bg-[#f1f3f0] px-3 py-1.5 text-[10px] font-medium text-[#68706a] transition hover:bg-[#e8ebe7] sm:text-xs"
                     >
                       Invoice
                     </button>
                   ) : (
-                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-medium text-gray-500">
+                    <span className="max-w-[110px] truncate rounded-full bg-[#f1f3f0] px-2.5 py-1 text-[9px] font-medium capitalize text-[#7d857f] sm:max-w-none">
                       {order.status.replaceAll("_", " ")}
                     </span>
                   )}
@@ -848,7 +930,7 @@ export default function CompanyHome() {
           })}
 
           {orders.length === 0 && (
-            <div className="px-6 py-10 text-center text-sm text-gray-400">
+            <div className="px-6 py-10 text-center text-xs text-[#a0a6a1]">
               No procurement activity yet.
             </div>
           )}
@@ -862,10 +944,10 @@ export default function CompanyHome() {
 }
 
 /* ============================================================
-   STAT CARD
+   OVERVIEW STAT
 ============================================================ */
 
-function StatCard({
+function OverviewStat({
   title,
   value,
   icon,
@@ -884,28 +966,41 @@ function StatCard({
   };
 
   return (
-    <motion.div
-      whileHover={{ y: -3 }}
-      className="rounded-2xl border bg-white p-5 shadow-sm"
-    >
-      <div className="flex items-center justify-between">
+    <div className="flex min-w-0 items-center gap-3 px-4 py-4 sm:px-5 sm:py-5 lg:px-6">
 
-        <p className="text-xs font-medium text-gray-400">
+      <div
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tones[tone]}`}
+      >
+        {icon}
+      </div>
+
+      <div className="min-w-0">
+        <p className="truncate text-[10px] font-medium text-[#9aa19b] sm:text-xs">
           {title}
         </p>
 
-        <div
-          className={`flex h-9 w-9 items-center justify-center rounded-xl ${tones[tone]}`}
-        >
-          {icon}
-        </div>
-
+        <p className="mt-1 truncate text-lg font-semibold tracking-tight text-[#3b413d] sm:text-xl">
+          {value}
+        </p>
       </div>
 
-      <p className="mt-4 text-2xl font-semibold text-gray-800">
-        {value}
-      </p>
+    </div>
+  );
+}
 
-    </motion.div>
+/* ============================================================
+   VERIFICATION BADGE
+============================================================ */
+
+function VerificationBadge({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-[9px] font-medium text-green-700">
+      <CheckCircle2 size={10} />
+      {children}
+    </span>
   );
 }

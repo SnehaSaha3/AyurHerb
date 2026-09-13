@@ -4,10 +4,12 @@ import {
   Bell,
   LayoutDashboard,
   MapPinned,
+  Menu,
   MessageSquare,
   Package,
   Truck,
   User,
+  X,
 } from "lucide-react";
 import {
   Outlet,
@@ -31,6 +33,7 @@ export default function CompanyDashboard() {
   const { totalUnread } = useUnread();
 
   const [companyName, setCompanyName] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const fetchCompany = async () => {
@@ -48,7 +51,9 @@ export default function CompanyDashboard() {
           }
         );
 
-        setCompanyName(response.data?.company?.name || "");
+        setCompanyName(
+          response.data?.company?.name || ""
+        );
       } catch (error) {
         console.error("Error fetching company:", error);
       }
@@ -60,38 +65,73 @@ export default function CompanyDashboard() {
   const menu: MenuItem[] = [
     {
       name: "Overview",
-      icon: <LayoutDashboard size={17} strokeWidth={1.8} />,
+      icon: (
+        <LayoutDashboard
+          size={17}
+          strokeWidth={1.8}
+        />
+      ),
       path: "/company-dashboard",
     },
     {
       name: "Farm Network",
-      icon: <MapPinned size={17} strokeWidth={1.8} />,
+      icon: (
+        <MapPinned
+          size={17}
+          strokeWidth={1.8}
+        />
+      ),
       path: "/company-dashboard/explore",
     },
     {
       name: "Orders",
-      icon: <Package size={17} strokeWidth={1.8} />,
+      icon: (
+        <Package
+          size={17}
+          strokeWidth={1.8}
+        />
+      ),
       path: "/company-dashboard/orders",
     },
     {
       name: "Shipments",
-      icon: <Truck size={17} strokeWidth={1.8} />,
+      icon: (
+        <Truck
+          size={17}
+          strokeWidth={1.8}
+        />
+      ),
       path: "/company-dashboard/shipments",
     },
     {
       name: "Analytics",
-      icon: <BarChart3 size={17} strokeWidth={1.8} />,
+      icon: (
+        <BarChart3
+          size={17}
+          strokeWidth={1.8}
+        />
+      ),
       path: "/company-dashboard/analytics",
     },
     {
       name: "Messages",
-      icon: <MessageSquare size={17} strokeWidth={1.8} />,
+      icon: (
+        <MessageSquare
+          size={17}
+          strokeWidth={1.8}
+        />
+      ),
       path: "/company-dashboard/messages",
       badge: totalUnread,
     },
     {
       name: "Profile",
-      icon: <User size={17} strokeWidth={1.8} />,
+      icon: (
+        <User
+          size={17}
+          strokeWidth={1.8}
+        />
+      ),
       path: "/company-dashboard/profile",
     },
   ];
@@ -105,21 +145,48 @@ export default function CompanyDashboard() {
   const initial =
     companyName.trim().charAt(0).toUpperCase() || "C";
 
+  const handleNavigate = (path: string) => {
+    navigate(path);
+    setSidebarOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-[#f7f8f6] text-[#1f2421]">
 
-      {/* =========================
-          SIDEBAR
-      ========================== */}
+      {sidebarOpen && (
+        <button
+          aria-label="Close sidebar"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-black/20 lg:hidden"
+        />
+      )}
 
-      <aside className="fixed inset-y-0 left-0 z-30 flex w-[240px] flex-col border-r border-[#e6e8e5] bg-white">
+      {/* SIDEBAR */}
 
-        {/* Logo */}
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50
+          flex w-[232px] flex-col
+          border-r border-[#e6e8e5]
+          bg-white
+          transition-transform duration-300 ease-out
+          lg:translate-x-0
+          ${
+            sidebarOpen
+              ? "translate-x-0"
+              : "-translate-x-full"
+          }
+        `}
+      >
 
-        <div className="flex h-[72px] items-center border-b border-[#eef0ed] px-6">
+        {/* LOGO */}
+
+        <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#eef0ed] px-5">
 
           <button
-            onClick={() => navigate("/company-dashboard")}
+            onClick={() =>
+              handleNavigate("/company-dashboard")
+            }
             className="flex items-center"
           >
             <img
@@ -129,18 +196,27 @@ export default function CompanyDashboard() {
             />
           </button>
 
+          <button
+            onClick={() =>
+              setSidebarOpen(false)
+            }
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#8d958f] hover:bg-[#f5f6f4] lg:hidden"
+            aria-label="Close navigation"
+          >
+            <X size={18} />
+          </button>
+
         </div>
 
+        {/* NAVIGATION */}
 
-        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-3 py-5">
 
-        <nav className="flex-1 px-3 py-6">
-
-          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#a0a6a1]">
+          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a0a6a1]">
             Workspace
           </p>
 
-          <div className="space-y-1">
+          <div className="space-y-0.5">
 
             {menu.map((item) => {
               const isActive =
@@ -149,52 +225,59 @@ export default function CompanyDashboard() {
               return (
                 <button
                   key={item.path}
-                  onClick={() => navigate(item.path)}
+                  onClick={() =>
+                    handleNavigate(item.path)
+                  }
                   className={`
-                    flex
-                    w-full
-                    items-center
-                    justify-between
+                    group flex w-full items-center justify-between
                     rounded-[9px]
-                    px-3
-                    py-[10px]
-                    text-left
-                    text-[13px]
-                    transition-colors
+                    px-3 py-[10px]
+                    text-left text-[13px]
+                    transition-all duration-150
                     ${
                       isActive
-                        ? "bg-[#f0f2ef] text-[#202521]"
+                        ? "bg-[#eef1ed] text-[#202521]"
                         : "text-[#69716b] hover:bg-[#f7f8f6] hover:text-[#252a26]"
                     }
                   `}
                 >
-                  <span className="flex items-center gap-3">
+
+                  <span className="flex min-w-0 items-center gap-3">
 
                     <span
-                      className={
-                        isActive
-                          ? "text-[#303730]"
-                          : "text-[#929992]"
-                      }
+                      className={`
+                        shrink-0 transition-colors
+                        ${
+                          isActive
+                            ? "text-[#303730]"
+                            : "text-[#929992] group-hover:text-[#687168]"
+                        }
+                      `}
                     >
                       {item.icon}
                     </span>
 
                     <span
-                      className={
-                        isActive
-                          ? "font-medium"
-                          : "font-normal"
-                      }
+                      className={`
+                        truncate
+                        ${
+                          isActive
+                            ? "font-medium"
+                            : "font-normal"
+                        }
+                      `}
                     >
                       {item.name}
                     </span>
 
                   </span>
 
-                  {item.badge && item.badge > 0 ? (
-                    <span className="flex h-[19px] min-w-[19px] items-center justify-center rounded-full bg-[#252a26] px-1.5 text-[9px] font-semibold text-white">
-                      {item.badge > 9 ? "9+" : item.badge}
+                  {item.badge &&
+                  item.badge > 0 ? (
+                    <span className="ml-2 flex h-[19px] min-w-[19px] shrink-0 items-center justify-center rounded-full bg-[#252a26] px-1.5 text-[9px] font-semibold text-white">
+                      {item.badge > 9
+                        ? "9+"
+                        : item.badge}
                     </span>
                   ) : null}
 
@@ -206,63 +289,62 @@ export default function CompanyDashboard() {
 
         </nav>
 
+        {/* FOOTER */}
 
-        {/* Sidebar footer */}
-
-        <div className="border-t border-[#eef0ed] px-5 py-4">
+        <div className="shrink-0 border-t border-[#eef0ed] px-5 py-4">
 
           <p className="text-[10px] font-medium text-[#8c948e]">
-            AyurHerb
+            AyurHerb © {new Date().getFullYear()}
           </p>
-
-          <p className="mt-1 text-[10px] text-[#b0b6b1]">
-            Agricultural supply network
-          </p>
-
         </div>
 
       </aside>
 
+      {/* MAIN */}
 
-      {/* =========================
-          MAIN
-      ========================== */}
+      <div className="min-h-screen lg:ml-[232px]">
 
-      <div className="ml-[240px] min-h-screen">
+        {/* TOP BAR */}
 
-        {/* Top navigation */}
+        <header className="sticky top-0 z-30 flex h-[68px] items-center justify-between border-b border-[#e6e8e5] bg-white px-4 sm:px-6 lg:px-8">
 
-        <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-[#e6e8e5] bg-white/95 px-8 backdrop-blur">
+          <div className="flex min-w-0 items-center gap-3">
 
-          {/* Current section */}
+            <button
+              onClick={() =>
+                setSidebarOpen(true)
+              }
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#69716b] hover:bg-[#f4f6f3] lg:hidden"
+              aria-label="Open navigation"
+            >
+              <Menu size={19} />
+            </button>
 
-          <div>
+            <div className="min-w-0">
 
-            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#a0a6a1]">
-              Company workspace
-            </p>
+              <p className="truncate text-[9px] font-medium uppercase tracking-[0.14em] text-[#a0a6a1] sm:text-[10px]">
+                Company workspace
+              </p>
 
-            <p className="mt-1 text-[13px] font-medium text-[#303630]">
-              {activeItem?.name || "Overview"}
-            </p>
+              {activeItem &&
+              activeItem.name !== "Overview" ? (
+                <p className="mt-0.5 truncate text-[12px] font-medium text-[#303630] sm:text-[13px]">
+                  {activeItem.name}
+                </p>
+              ) : null}
+
+            </div>
 
           </div>
 
+          {/* RIGHT */}
 
-          {/* Company */}
-
-          <div className="flex items-center gap-5">
-
-            {/* Notifications */}
+          <div className="flex shrink-0 items-center gap-3 sm:gap-5">
 
             <button
               className="
-                relative
-                flex
-                h-9
-                w-9
-                items-center
-                justify-center
+                relative flex h-9 w-9
+                items-center justify-center
                 rounded-full
                 text-[#8c948e]
                 transition-colors
@@ -271,24 +353,21 @@ export default function CompanyDashboard() {
               "
               aria-label="Notifications"
             >
-              <Bell size={17} strokeWidth={1.8} />
-
-              {/* Notification indicator */}
+              <Bell
+                size={17}
+                strokeWidth={1.8}
+              />
 
               <span className="absolute right-[8px] top-[7px] h-1.5 w-1.5 rounded-full bg-[#6f8273]" />
             </button>
 
+            <div className="hidden h-6 w-px bg-[#e7e9e6] sm:block" />
 
-            <div className="h-6 w-px bg-[#e7e9e6]" />
+            <div className="flex items-center gap-2.5 sm:gap-3">
 
+              <div className="hidden text-right md:block">
 
-            {/* Company identity */}
-
-            <div className="flex items-center gap-3">
-
-              <div className="hidden text-right sm:block">
-
-                <p className="text-[12px] font-medium text-[#303630]">
+                <p className="max-w-[180px] truncate text-[12px] font-medium text-[#303630]">
                   {companyName || "Company"}
                 </p>
 
@@ -298,8 +377,7 @@ export default function CompanyDashboard() {
 
               </div>
 
-
-              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#dfe3df] bg-[#f5f6f4] text-[12px] font-semibold text-[#495149]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#dfe3df] bg-[#f5f6f4] text-[12px] font-semibold text-[#495149]">
                 {initial}
               </div>
 
@@ -309,10 +387,9 @@ export default function CompanyDashboard() {
 
         </header>
 
+        {/* CONTENT */}
 
-        {/* Page content */}
-
-        <main className="px-8 py-7">
+        <main className="min-w-0 px-3 py-5 sm:px-5 sm:py-6 lg:px-7 lg:py-7 xl:px-8">
 
           <Outlet />
 
