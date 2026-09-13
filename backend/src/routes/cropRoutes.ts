@@ -36,7 +36,7 @@ function formatOnChainCrop(
     season: c.season || "-",
     area: c.area,
     location: { lat: c.lat, lng: c.lng },
-    source: "Blockchain",
+    source: "Verified",
     farmerName,
     farmerId,
   };
@@ -50,7 +50,7 @@ function formatOffChainCrop(c: any, farmerName: string, farmerId: any): Formatte
     season: c.season ?? "-",
     quantity: c.quantity ?? 0,
     location: c.location ?? { lat: 0, lng: 0 },
-    source: "MongoDB",
+    source: "Verified",
     farmerName,
     farmerId,
   };

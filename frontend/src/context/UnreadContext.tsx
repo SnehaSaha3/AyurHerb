@@ -1,6 +1,21 @@
-import { createContext, useContext, useEffect, useRef, useState ,type ReactNode} from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useLocation } from "react-router-dom";
 import axios from "axios";
 import { getSocket } from "../lib/Socket.client";
+
+interface UnreadUpdatePayload {
+  senderId?: string;
+  receiverId?: string;
+  senderType?: "farmer" | "company";
+  receiverType?: "farmer" | "company";
+}
 
 interface UnreadContextValue {
   unreadCounts: Record<string, number>;
@@ -20,35 +35,110 @@ export function useUnread() {
   return useContext(UnreadContext);
 }
 
-/**
- * Single shared unread state for the whole app — the dashboard nav badge
- * and the per-thread sidebar badges both read from this, so clearing a
- * thread anywhere updates everywhere instantly. No more "works on the
- * Messages page but the nav badge needs a refresh to catch up."
- */
+function getTokenForRoute(pathname: string): string | null {
+  const isCompanyRoute =
+    pathname.startsWith("/company-dashboard") ||
+    pathname.startsWith("/company");
+
+  if (isCompanyRoute) {
+    return localStorage.getItem("companyToken");
+  }
+
+  return localStorage.getItem("farmerToken");
+}
+
 export function UnreadProvider({ children }: { children: ReactNode }) {
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const location = useLocation();
+
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>(
+    {}
+  );
+
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+
+  const [token, setToken] = useState<string | null>(() =>
+    getTokenForRoute(window.location.pathname)
+  );
+
   const activeThreadRef = useRef<string | null>(null);
 
   useEffect(() => {
     activeThreadRef.current = activeThreadId;
   }, [activeThreadId]);
 
+  /*
+   * Detect which account is currently active.
+   * This is important when both farmerToken and companyToken
+   * exist in localStorage.
+   */
   useEffect(() => {
-    const token = localStorage.getItem("farmerToken") || localStorage.getItem("companyToken");
-    if (!token) return;
+    const currentToken = getTokenForRoute(location.pathname);
+
+    if (currentToken !== token) {
+      setToken(currentToken);
+      setUnreadCounts({});
+      setActiveThreadId(null);
+      activeThreadRef.current = null;
+    }
+  }, [location.pathname, token]);
+
+  /*
+   * Handle storage changes from another browser tab.
+   */
+  useEffect(() => {
+    const handleStorage = () => {
+      const currentToken = getTokenForRoute(window.location.pathname);
+
+      if (currentToken !== token) {
+        setToken(currentToken);
+        setUnreadCounts({});
+        setActiveThreadId(null);
+        activeThreadRef.current = null;
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [token]);
+
+  /*
+   * Fetch unread counts and listen for realtime updates.
+   */
+  useEffect(() => {
+    if (!token) {
+      setUnreadCounts({});
+      return;
+    }
+
+    let cancelled = false;
 
     const fetchUnreadCounts = async () => {
       try {
-        const res = await axios.get("http://localhost:8000/api/messages/unread-counts", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.data?.success && res.data.unreadCounts && typeof res.data.unreadCounts === "object") {
+        const res = await axios.get(
+          "http://localhost:8000/api/messages/unread-counts",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (
+          !cancelled &&
+          res.data?.success &&
+          res.data?.unreadCounts &&
+          typeof res.data.unreadCounts === "object"
+        ) {
           setUnreadCounts(res.data.unreadCounts);
         }
       } catch (err) {
-        console.error("Error fetching unread counts", err);
+        console.error(
+          "[UnreadContext] Error fetching unread counts:",
+          err
+        );
       }
     };
 
@@ -56,33 +146,72 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
 
     const socket = getSocket(token);
 
-    socket.on("unread:update", (payload: { senderId?: string }) => {
-      const senderId = payload?.senderId;
-      if (!senderId) return;
+    const handleUnreadUpdate = (payload: UnreadUpdatePayload) => {
+      if (!payload?.senderId) {
+        return;
+      }
 
-      // Don't bump the thread the user is actively looking at right now —
-      // they'll see the message land live; it's not "unread" to them.
-      if (senderId === activeThreadRef.current) return;
+      const threadId = payload.senderId;
 
-      setUnreadCounts((prev) => ({ ...(prev || {}), [senderId]: (prev?.[senderId] ?? 0) + 1 }));
-    });
+      /*
+       * If the user is currently inside this conversation,
+       * don't show it as unread.
+       */
+      if (threadId === activeThreadRef.current) {
+        return;
+      }
+
+      setUnreadCounts((prev) => ({
+        ...prev,
+        [threadId]: (prev[threadId] ?? 0) + 1,
+      }));
+    };
+
+    socket.on("unread:update", handleUnreadUpdate);
 
     return () => {
-      socket.off("unread:update");
+      cancelled = true;
+      socket.off("unread:update", handleUnreadUpdate);
     };
-  }, []);
+  }, [token]);
 
+  /*
+   * Mark a conversation as active/read locally.
+   */
   const setActiveThread = (id: string | null) => {
     setActiveThreadId(id);
-    if (id) {
-      setUnreadCounts((prev) => ({ ...(prev || {}), [id]: 0 }));
+    activeThreadRef.current = id;
+
+    if (!id) {
+      return;
     }
+
+    setUnreadCounts((prev) => {
+      if (!(id in prev)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [id]: 0,
+      };
+    });
   };
 
-  const totalUnread = Object.values(unreadCounts).reduce((sum, n) => sum + n, 0);
+  const totalUnread = Object.values(unreadCounts).reduce(
+    (sum, count) => sum + (Number(count) || 0),
+    0
+  );
 
   return (
-    <UnreadContext.Provider value={{ unreadCounts, totalUnread, activeThreadId, setActiveThread }}>
+    <UnreadContext.Provider
+      value={{
+        unreadCounts,
+        totalUnread,
+        activeThreadId,
+        setActiveThread,
+      }}
+    >
       {children}
     </UnreadContext.Provider>
   );

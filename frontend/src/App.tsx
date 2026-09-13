@@ -25,6 +25,8 @@ import CompanyExplore from "./components/companypages/CompanyExplore"
 import CompanyOrders from "./components/companypages/CompanyOrders";
 import CompanyShipments from "./components/shipment/CompanyShipments";
 import FarmerShipments from "./components/shipment/FarmerShipment";
+import { UnreadProvider } from "./context/UnreadContext";
+import Recommendations from "./components/pages/Recommendations";
 function App() {
   const [loading, setLoading] = useState(true);
 
@@ -51,17 +53,18 @@ function App() {
      
 
 
-      <Route path="/farmer-dashboard" element={<FarmerDashboard />}>
+      <Route path="/farmer-dashboard" element={  <UnreadProvider>  <FarmerDashboard /> </UnreadProvider>}>
         <Route index element={<Home />} />
         <Route path="crops" element={<CropList />} />
         <Route path="geotagged" element={<CropMap />} />
         <Route path="shipments" element={<FarmerShipments />}/>
         <Route path="messages" element={<FarmerMessages />} />
+        <Route path="/farmer-dashboard/recommendations" element={<Recommendations />}/>
         <Route path="analytics" element={<FarmerAnalytics />}/>
         <Route path="profile" element={<Profile />} />
      </Route>
 
-      <Route path="/company-dashboard" element={<CompanyDashboard />}>
+      <Route path="/company-dashboard" element={ <UnreadProvider> <CompanyDashboard /> </ UnreadProvider> }>
         <Route index element={<CompanyHome />} />
         <Route path="explore" element={<CompanyExplore />} />
      <Route
