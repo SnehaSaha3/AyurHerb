@@ -14,6 +14,7 @@ import { initSocket } from "./socket";
 import orderRoutes from "./routes/orderRoutes"
 import shipmentRoutes from "./routes/shipmentRoutes";
 import publicVerifyRoutes from "./routes/publicRoutes"
+import publicVerificationRouter from "./routes/publicVerificationRouter"
 
 
 const app = express();
@@ -34,6 +35,7 @@ app.use("/api/weather", weatherRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/shipments", shipmentRoutes);
 app.use("/api/public", publicVerifyRoutes)
+app.use("/api/public",publicVerificationRouter);
 
 mongoose.connect(process.env.MONGODB_URI as string)
   .then(() => console.log("✅ MongoDB connected"))

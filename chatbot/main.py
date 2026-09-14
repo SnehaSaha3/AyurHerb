@@ -1,22 +1,55 @@
 import ingest
-import rag
+import chatbot.agent as agent
 
-if __name__ == "__main__":
-    print("🔹 Starting ingestion...")
+
+def main():
+
+    print()
+    print("=" * 60)
+    print("🌿 AyurMate RAG")
+    print("=" * 60)
+    print()
+
+    print("🔹 Starting knowledge-base ingestion...")
+
     ingest.ingest_data()
-    print("✅ Ingestion complete!\n")
 
-    print("🔹 You can now query the RAG system!")
+    print()
+    print("✅ Knowledge base ready.")
+    print()
+
+    print("🔹 AyurMate interactive test")
+    print("Type 'exit' to quit.")
+    print()
 
     while True:
-        question = input("Enter your question (or type 'exit' to quit): ").strip()
+
+        question = input(
+            "Farmer > "
+        ).strip()
 
         if question.lower() == "exit":
-            print("👋 Goodbye!")
+
+            print(
+                "👋 AyurMate session ended."
+            )
+
             break
 
         if not question:
-            continue  # skip empty input
 
-        answer = rag.query_rag(question)   # ✅ since query_rag is inside rag.py
-        print(f"\n💡 Answer:\n{answer}\n")
+            continue
+
+        answer = agent.query_rag(
+            question
+        )
+
+        print()
+        print(
+            f"AyurMate > {answer}"
+        )
+        print()
+
+
+if __name__ == "__main__":
+    main()

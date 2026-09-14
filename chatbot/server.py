@@ -1,43 +1,75 @@
-# server.py
+from typing import Any
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from rag import query_rag, recommend_crop
 
-app = FastAPI()
+from agent import AyurMateAgent
 
-# Enable CORS
+
+app = FastAPI(
+    title="AyurMate Agent",
+    description="Context-aware agricultural decision agent",
+    version="1.0.0",
+)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # React dev server
+    allow_origins=[
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.post("/query")
-async def query_endpoint(payload: dict):
-    question = payload.get("question", "")
-    context = payload.get("context", {})  # receive farm context: { location, weather }
 
-    if not question:
-        return {"error": "Question is required"}
-
-    answer = query_rag(question, context=context)
-    return {"answer": answer}
-
-
-@app.post("/recommend")
-async def recommend_endpoint(payload: dict):
-    location = payload.get("location", "")
-    satellite_data = payload.get("satellite_data", {})
-
-    if not location:
-        return {"error": "Location is required"}
-
-    answer = recommend_crop(location, satellite_data)
-    return {"answer": answer}
+agent = AyurMateAgent()
 
 
 @app.get("/")
-def root():
-    return {"message": "AyurMate Chatbot Backend Running!"}
+async def root():
+    return {
+        "service": "AyurMate",
+        "type": "agricultural-agent",
+        "model": "openai/gpt-oss-120b",
+        "status": "running",
+    }
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "agent": "AyurMate",
+    }
+
+
+@app.post("/query")
+async def query(
+    payload: dict[str, Any]
+):
+
+    question = str(
+        payload.get("question", "")
+    ).strip()
+
+    if not question:
+        return {
+            "error": "Question is required."
+        }
+
+    farmer = payload.get(
+        "farmer",
+        {}
+    )
+
+    if not isinstance(farmer, dict):
+        farmer = {}
+
+    result = agent.run(
+        farmer=farmer,
+        question=question,
+    )
+
+    return result

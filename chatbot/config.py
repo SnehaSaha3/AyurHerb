@@ -1,20 +1,17 @@
 import os
-from dotenv import load_dotenv
-import chromadb
-import google.generativeai as genai
 
-# Load env vars
+from dotenv import load_dotenv
+from groq import Groq
+
 load_dotenv()
 
-# Gemini setup
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    GEMINI_AVAILABLE = True
-else:
-    print("⚠️ GEMINI_API_KEY not found. Only context retrieval will work.")
-    GEMINI_AVAILABLE = False
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# ChromaDB setup
-chroma_client = chromadb.PersistentClient(path="vector_db")
-collection = chroma_client.get_or_create_collection("farming_docs")
+if not GROQ_API_KEY:
+    raise RuntimeError(
+        "GROQ_API_KEY is missing. Add it to chatbot/.env"
+    )
+
+client = Groq(api_key=GROQ_API_KEY)
+
+GROQ_MODEL = "openai/gpt-oss-120b"
