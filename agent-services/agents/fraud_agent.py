@@ -100,6 +100,9 @@ def check_fraud_risk(req: FraudCheckRequest) -> FraudCheckResponse:
         )
         raw = completion.choices[0].message.content or ""
         parsed = json.loads(raw)
+        parsed["riskScore"] = max(0.0, min(1.0, parsed["riskScore"]))
+        parsed["requiresAdminReview"] = parsed["riskScore"] >= 0.35
+        parsed["autoHold"] = parsed["riskScore"] >= 0.70
         return FraudCheckResponse(**parsed)
 
     except json.JSONDecodeError:
