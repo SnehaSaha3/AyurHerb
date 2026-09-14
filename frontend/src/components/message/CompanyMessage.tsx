@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Send, Search, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  MapPin,
+  Package,
+  Search,
+  Send,
+  ShoppingCart,
+  UserRound,
+  X,
+} from "lucide-react";
 import axios from "axios";
+
 import {
   getSocket,
   decodeJwtPayload,
@@ -49,13 +60,13 @@ function getCropIcon(cropName: string): string {
   return CROP_ICONS[key] || "🌱";
 }
 
-function getFarmerCrops(f: Farmer): CropEntry[] {
-  if (f.crops && f.crops.length > 0) {
-    return f.crops;
+function getFarmerCrops(farmer: Farmer): CropEntry[] {
+  if (farmer.crops && farmer.crops.length > 0) {
+    return farmer.crops;
   }
 
-  if (f.herb) {
-    return [{ cropName: f.herb }];
+  if (farmer.herb) {
+    return [{ cropName: farmer.herb }];
   }
 
   return [];
@@ -125,7 +136,6 @@ export default function CompanyMessages() {
 
   /*
    * Resolve company identity and connect socket.
-   * Unread updates are handled globally by UnreadContext.
    */
   useEffect(() => {
     const token =
@@ -149,10 +159,10 @@ export default function CompanyMessages() {
     ) => {
       setMessages((prev) => {
         const exists = prev.some(
-          (m) =>
-            m.createdAt === msg.createdAt &&
-            m.senderId === msg.senderId &&
-            m.text === msg.text
+          (message) =>
+            message.createdAt === msg.createdAt &&
+            message.senderId === msg.senderId &&
+            message.text === msg.text
         );
 
         if (exists) {
@@ -227,8 +237,8 @@ export default function CompanyMessages() {
     }
 
     const match = farmers.find(
-      (f) =>
-        f.farmerId === farmerIdFromUrl
+      (farmer) =>
+        farmer.farmerId === farmerIdFromUrl
     );
 
     if (match) {
@@ -250,14 +260,17 @@ export default function CompanyMessages() {
       return;
     }
 
-    const q = search.toLowerCase();
+    const query =
+      search.trim().toLowerCase();
 
-    const matched = farmers.filter((f) =>
-      getFarmerCrops(f).some((c) =>
-        c.cropName
-          .toLowerCase()
-          .includes(q)
-      )
+    const matched = farmers.filter(
+      (farmer) =>
+        getFarmerCrops(farmer).some(
+          (crop) =>
+            crop.cropName
+              .toLowerCase()
+              .includes(query)
+        )
     );
 
     setFilteredFarmers(matched);
@@ -322,11 +335,7 @@ export default function CompanyMessages() {
   ]);
 
   /*
-   * Scroll to newest message whenever:
-   * - history loads
-   * - a message is received
-   * - a message is sent
-   * - the selected farmer changes
+   * Scroll to newest message.
    */
   useEffect(() => {
     if (
@@ -338,12 +347,10 @@ export default function CompanyMessages() {
 
     const frame =
       requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView(
-          {
-            behavior: "smooth",
-            block: "end",
-          }
-        );
+        messagesEndRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
       });
 
     return () =>
@@ -373,7 +380,6 @@ export default function CompanyMessages() {
     if (!token) return;
 
     const socket = getSocket(token);
-
     const text = input.trim();
 
     setInput("");
@@ -445,8 +451,8 @@ export default function CompanyMessages() {
 
     const chosenCrop =
       crops.find(
-        (c) =>
-          c.cropId === orderCropId
+        (crop) =>
+          crop.cropId === orderCropId
       ) || crops[0];
 
     if (
@@ -551,65 +557,150 @@ export default function CompanyMessages() {
 
   if (!companyId) {
     return (
-      <div className="flex h-[calc(100vh-80px)] items-center justify-center">
-        <p className="text-gray-500">
-          Please log in as a company to view messages.
-        </p>
+      <div className="flex min-h-[calc(100dvh-80px)] items-center justify-center px-4">
+        <div className="rounded-2xl border border-[#e4ebe1] bg-white/80 px-6 py-5 text-center shadow-sm backdrop-blur-md">
+          <p className="text-sm text-[#718071]">
+            Please log in as a company to view messages.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-[calc(100vh-80px)] overflow-hidden rounded-3xl border bg-gradient-to-br from-green-50 via-white to-emerald-100 shadow-2xl">
+    <div
+      className="
+        flex
+        h-[calc(100dvh-100px)]
+        min-h-[560px]
+        w-full
+        min-w-0
+        overflow-hidden
+        rounded-[26px]
+        border
+        border-white/80
+        bg-white/[0.90]
+        shadow-[0_18px_55px_rgba(31,69,39,0.08)]
+        backdrop-blur-md
+      "
+    >
+      {/* =========================================================
+          LEFT — FARMERS
+          ========================================================= */}
+      <aside
+        className="
+          flex
+          w-[280px]
+          min-w-[240px]
+          max-w-[32%]
+          shrink-0
+          flex-col
+          border-r
+          border-[#e5ece3]
+          bg-white/55
+        "
+      >
+        {/* HEADER */}
+        <div className="shrink-0 border-b border-[#e8eee6] p-4">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9aa897]">
+                Conversations
+              </p>
 
-      {/* LEFT PANEL */}
+              <h2 className="mt-1 truncate text-sm font-semibold text-[#193522]">
+                Farmers
+              </h2>
+            </div>
 
-      <div className="flex w-1/4 flex-col border-r bg-white/60 backdrop-blur-lg">
+            <span className="rounded-full bg-[#edf6eb] px-2.5 py-1 text-[10px] font-semibold text-[#4c8355]">
+              {farmers.length}
+            </span>
+          </div>
 
-        <div className="border-b p-4">
-
-          <div className="flex items-center rounded-xl border bg-white/80 px-3 py-2 shadow-sm transition focus-within:ring-2 focus-within:ring-green-400">
-
+          {/* SEARCH */}
+          <div
+            className="
+              mt-4
+              flex
+              h-10
+              items-center
+              rounded-xl
+              border
+              border-[#dfe8dc]
+              bg-white/80
+              px-3
+              transition
+              focus-within:border-[#a9c7aa]
+              focus-within:ring-2
+              focus-within:ring-[#dcebd9]
+            "
+          >
             <Search
-              size={16}
-              className="text-gray-400"
+              size={15}
+              className="shrink-0 text-[#8c9a8c]"
             />
 
             <input
               value={search}
-              onChange={(e) =>
-                setSearch(
-                  e.target.value
-                )
+              onChange={(event) =>
+                setSearch(event.target.value)
               }
-              placeholder="Search by crop (e.g. Tulsi)..."
-              className="ml-2 w-full bg-transparent text-sm outline-none"
+              placeholder="Search crops..."
+              className="
+                ml-2
+                min-w-0
+                flex-1
+                bg-transparent
+                text-xs
+                text-[#314b36]
+                outline-none
+                placeholder:text-[#a1aaa0]
+              "
             />
 
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="text-[#9aa897] hover:text-[#526453]"
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
-
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-
+        {/* FARMER LIST */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {filteredFarmers.length === 0 && (
-            <p className="mt-6 text-center text-sm text-gray-400">
-              No farmers found 🌱
-            </p>
+            <div className="px-5 py-12 text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-[#f1f7ef] text-lg">
+                🌱
+              </div>
+
+              <p className="mt-3 text-xs font-medium text-[#667467]">
+                No farmers found
+              </p>
+
+              <p className="mt-1 text-[10px] text-[#9aa897]">
+                Try another crop name.
+              </p>
+            </div>
           )}
 
-          {filteredFarmers.map((f) => {
-
+          {filteredFarmers.map((farmer) => {
             const crops =
-              getFarmerCrops(f);
+              getFarmerCrops(farmer);
 
             const query =
               search.trim().toLowerCase();
 
             const matchedCrop =
               (query &&
-                crops.find((c) =>
-                  c.cropName
+                crops.find((crop) =>
+                  crop.cropName
                     .toLowerCase()
                     .includes(query)
                 )) ||
@@ -621,7 +712,7 @@ export default function CompanyMessages() {
 
             const isExpanded =
               expandedFarmerId ===
-              f.farmerId;
+              farmer.farmerId;
 
             const icon =
               getCropIcon(
@@ -630,393 +721,744 @@ export default function CompanyMessages() {
 
             const unread =
               getUnreadFor(
-                f.farmerId
+                farmer.farmerId
               );
+
+            const selected =
+              selectedFarmer?.farmerId ===
+              farmer.farmerId;
 
             return (
               <div
-                key={f.farmerId}
-                className="border-b"
+                key={farmer.farmerId}
+                className="border-b border-[#edf1eb]"
               >
-
-                <div
+                <button
+                  type="button"
                   onClick={() =>
-                    handleSelectFarmer(f)
+                    handleSelectFarmer(farmer)
                   }
                   className={`
-                    flex cursor-pointer
-                    items-center gap-3
-                    p-4
-                    transition-all duration-200
+                    flex
+                    w-full
+                    items-center
+                    gap-3
+                    px-4
+                    py-3.5
+                    text-left
+                    transition
                     ${
-                      selectedFarmer?.farmerId ===
-                      f.farmerId
-                        ? "bg-gradient-to-r from-green-200 to-emerald-100"
-                        : "hover:bg-green-50"
+                      selected
+                        ? "bg-[#edf6eb]"
+                        : "hover:bg-white/70"
                     }
                   `}
                 >
-
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-green-100 text-lg">
+                  {/* CROP ICON */}
+                  <div
+                    className={`
+                      flex
+                      h-10
+                      w-10
+                      shrink-0
+                      items-center
+                      justify-center
+                      rounded-xl
+                      border
+                      text-lg
+                      ${
+                        selected
+                          ? "border-[#cde3ca] bg-white"
+                          : "border-[#e2ebe0] bg-[#f5f9f3]"
+                      }
+                    `}
+                  >
                     {icon}
                   </div>
 
+                  {/* INFO */}
                   <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={`
+                          min-w-0
+                          flex-1
+                          truncate
+                          text-sm
+                          ${
+                            unread > 0
+                              ? "font-bold text-[#193522]"
+                              : "font-semibold text-[#314b36]"
+                          }
+                        `}
+                      >
+                        {farmer.name}
+                      </p>
 
-                    <p
-                      className={`
-                        truncate text-sm
-                        ${
-                          unread > 0
-                            ? "font-bold text-gray-900"
-                            : "font-semibold text-gray-800"
-                        }
-                      `}
-                    >
-                      {f.name}
-                    </p>
+                      {unread > 0 && (
+                        <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-[#2f8a49] px-1.5 text-[9px] font-bold text-white">
+                          {unread > 9
+                            ? "9+"
+                            : unread}
+                        </span>
+                      )}
+                    </div>
 
-                    <p className="truncate text-xs text-gray-500">
-
-                      {matchedCrop?.cropName ||
-                        "No crop info"}
+                    <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-[#829083]">
+                      <span className="truncate">
+                        {matchedCrop?.cropName ||
+                          "No crop info"}
+                      </span>
 
                       {otherCount > 0 && (
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
 
                             setExpandedFarmerId(
                               isExpanded
                                 ? null
-                                : f.farmerId
+                                : farmer.farmerId
                             );
                           }}
-                          className="ml-1 font-medium text-green-600 hover:underline"
+                          className="shrink-0 font-semibold text-[#3e8650] hover:underline"
                         >
                           +{otherCount}
                         </button>
                       )}
+                    </div>
 
-                    </p>
+                    {farmer.address && (
+                      <div className="mt-1 flex min-w-0 items-center gap-1 text-[9px] text-[#a0aaa0]">
+                        <MapPin
+                          size={10}
+                          className="shrink-0"
+                        />
 
-                    {f.address && (
-                      <p className="truncate text-[11px] text-gray-400">
-                        📍 {f.address}
-                      </p>
-                    )}
-
-                  </div>
-
-                  {unread > 0 && (
-                    <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-green-500 px-1.5 text-[11px] font-bold text-white">
-                      {unread > 9
-                        ? "9+"
-                        : unread}
-                    </span>
-                  )}
-
-                </div>
-
-                {isExpanded && (
-                  <div className="space-y-1 pb-3 pl-16 pr-4">
-
-                    {crops.map((c, i) => (
-                      <div
-                        key={
-                          c.cropId ?? i
-                        }
-                        className="flex items-center gap-2 text-xs text-gray-600"
-                      >
-                        <span>
-                          {getCropIcon(
-                            c.cropName
-                          )}
+                        <span className="truncate">
+                          {farmer.address}
                         </span>
-
-                        <span>
-                          {c.cropName}
-                        </span>
-
-                        {c.season && (
-                          <span className="text-gray-400">
-                            · {c.season}
-                          </span>
-                        )}
                       </div>
-                    ))}
+                    )}
+                  </div>
+                </button>
 
+                {/* EXPANDED CROPS */}
+                {isExpanded && (
+                  <div className="space-y-2 bg-[#fafcf9] px-4 pb-3 pl-[68px]">
+                    {crops.map(
+                      (crop, index) => (
+                        <div
+                          key={
+                            crop.cropId ??
+                            index
+                          }
+                          className="flex items-center gap-2 text-[10px] text-[#667467]"
+                        >
+                          <span>
+                            {getCropIcon(
+                              crop.cropName
+                            )}
+                          </span>
+
+                          <span className="truncate">
+                            {crop.cropName}
+                          </span>
+
+                          {crop.season && (
+                            <span className="shrink-0 text-[#a1aaa0]">
+                              · {crop.season}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    )}
                   </div>
                 )}
-
               </div>
             );
           })}
-
         </div>
+      </aside>
 
-      </div>
+      {/* =========================================================
+          CENTER — CHAT
+          ========================================================= */}
+      <main
+        className="
+          flex
+          min-w-0
+          flex-1
+          flex-col
+          bg-white/35
+        "
+      >
+        {/* CHAT HEADER */}
+        <header
+          className="
+            flex
+            min-h-[70px]
+            shrink-0
+            items-center
+            justify-between
+            gap-3
+            border-b
+            border-[#e5ece3]
+            bg-white/60
+            px-4
+            py-3
+            backdrop-blur-md
+            sm:px-5
+          "
+        >
+          {selectedFarmer ? (
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#edf6eb] text-lg">
+                {getCropIcon(
+                  getFarmerCrops(
+                    selectedFarmer
+                  )[0]?.cropName || ""
+                )}
+              </div>
 
-      {/* CHAT PANEL */}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-[#193522]">
+                  {selectedFarmer.name}
+                </p>
 
-      <div className="flex flex-1 flex-col bg-white/40 backdrop-blur-lg">
+                {selectedFarmer.address ? (
+                  <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-[#8a9889]">
+                    <MapPin
+                      size={10}
+                      className="shrink-0"
+                    />
 
-        <div className="border-b bg-white/60 p-4 backdrop-blur-md">
+                    <span className="truncate">
+                      {selectedFarmer.address}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-[#9aa897]">
+                    Farmer
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm font-semibold text-[#193522]">
+                Messages
+              </p>
 
-          <p className="font-semibold text-gray-800">
-            {selectedFarmer?.name ||
-              "Select a farmer"}
-          </p>
+              <p className="mt-0.5 text-[10px] text-[#8a9889]">
+                Select a farmer to start a conversation
+              </p>
+            </div>
+          )}
 
-          <p className="text-xs text-gray-500">
-            {selectedFarmer?.address || ""}
-          </p>
+          {selectedFarmer && (
+            <div className="hidden shrink-0 items-center gap-2 rounded-full bg-[#f1f7ef] px-3 py-1.5 text-[10px] font-medium text-[#59805e] md:flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#4c9a59]" />
+              Conversation active
+            </div>
+          )}
+        </header>
 
-        </div>
-
-        <div className="flex-1 space-y-3 overflow-y-auto p-5">
-
+        {/* MESSAGES */}
+        <div
+          className="
+            min-h-0
+            flex-1
+            overflow-y-auto
+            px-4
+            py-5
+            sm:px-6
+          "
+        >
           {!selectedFarmer && (
-            <p className="mt-10 text-center text-gray-400">
-              Select a farmer to start chatting 👨‍🌾
-            </p>
+            <div className="flex h-full min-h-[300px] items-center justify-center">
+              <div className="max-w-sm text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f1f7ef] text-[#5a8c62]">
+                  <Send
+                    size={22}
+                    strokeWidth={1.6}
+                  />
+                </div>
+
+                <p className="mt-4 text-sm font-semibold text-[#526453]">
+                  Start a conversation
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-[#929e91]">
+                  Choose a farmer from the left to discuss
+                  crops, availability or an order.
+                </p>
+              </div>
+            </div>
           )}
 
           {selectedFarmer &&
             messages.length === 0 && (
-              <p className="text-center text-sm text-gray-400">
-                No messages yet. Start conversation 👋
-              </p>
+              <div className="flex h-full min-h-[260px] items-center justify-center">
+                <div className="text-center">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f4f8f2] text-xl">
+                    👋
+                  </div>
+
+                  <p className="mt-3 text-sm font-medium text-[#667467]">
+                    No messages yet
+                  </p>
+
+                  <p className="mt-1 text-[11px] text-[#9aa897]">
+                    Send the first message to
+                    {selectedFarmer.name}.
+                  </p>
+                </div>
+              </div>
             )}
 
-          {messages.map((msg, i) => {
+          {messages.length > 0 && (
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+              {messages.map(
+                (message, index) => {
+                  const isMe =
+                    message.senderId ===
+                    companyId;
 
-            const isMe =
-              msg.senderId ===
-              companyId;
+                  return (
+                    <div
+                      key={`${message.createdAt}-${message.senderId}-${index}`}
+                      className={`flex ${
+                        isMe
+                          ? "justify-end"
+                          : "justify-start"
+                      }`}
+                    >
+                      <div
+                        className={`
+                          max-w-[78%]
+                          whitespace-pre-line
+                          rounded-2xl
+                          px-4
+                          py-2.5
+                          text-sm
+                          leading-5
+                          ${
+                            isMe
+                              ? "rounded-br-md bg-[#28733d] text-white shadow-[0_5px_15px_rgba(40,115,61,0.12)]"
+                              : "rounded-bl-md border border-[#e5ebe3] bg-white text-[#344637] shadow-sm"
+                          }
+                        `}
+                      >
+                        {message.text}
 
-            return (
-              <div
-                key={`${msg.createdAt}-${msg.senderId}-${i}`}
-                className={`flex ${
-                  isMe
-                    ? "justify-end"
-                    : "justify-start"
-                }`}
-              >
-
-                <div
-                  className={`
-                    max-w-xs whitespace-pre-line
-                    rounded-2xl px-4 py-2
-                    text-sm shadow-md
-                    transition
-                    ${
-                      isMe
-                        ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white"
-                        : "border bg-white text-gray-800"
-                    }
-                  `}
-                >
-                  {msg.text}
-                </div>
-
-              </div>
-            );
-          })}
-
-          <div
-            ref={messagesEndRef}
-            className="h-px w-full"
-            aria-hidden="true"
-          />
-
-        </div>
-
-        {selectedFarmer && (
-          <div className="flex items-center gap-2 border-t bg-white/70 p-3 backdrop-blur-md">
-
-            <input
-              value={input}
-              onChange={(e) =>
-                setInput(e.target.value)
-              }
-              placeholder="Type a message... (try /report)"
-              className="flex-1 rounded-xl border bg-white/80 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-green-400"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  sendMessage();
+                        <p
+                          className={`
+                            mt-1
+                            text-[8px]
+                            ${
+                              isMe
+                                ? "text-white/60"
+                                : "text-[#a1aaa0]"
+                            }
+                          `}
+                        >
+                          {new Date(
+                            message.createdAt
+                          ).toLocaleTimeString(
+                            [],
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  );
                 }
-              }}
-            />
+              )}
 
-            <button
-              onClick={sendMessage}
-              className="rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 p-3 text-white shadow-md transition hover:scale-105"
-            >
-              <Send size={16} />
-            </button>
-
-          </div>
-        )}
-
-      </div>
-
-      {/* RIGHT PANEL */}
-
-      {selectedFarmer && (
-        <div className="hidden w-1/4 border-l bg-white/60 p-6 backdrop-blur-lg lg:block">
-
-          <h3 className="mb-4 font-semibold text-gray-800">
-            🌾 Farmer Details
-          </h3>
-
-          <div className="space-y-3 text-sm">
-
-            <p>
-              <span className="text-gray-500">
-                Name:
-              </span>{" "}
-              <span className="font-medium">
-                {selectedFarmer.name}
-              </span>
-            </p>
-
-            <p>
-              <span className="text-gray-500">
-                Location:
-              </span>{" "}
-              {selectedFarmer.address ||
-                "—"}
-            </p>
-
-            <div className="space-y-1">
-
-              <span className="text-gray-500">
-                Crops:
-              </span>
-
-              <div className="mt-1 flex flex-wrap gap-1">
-
-                {getFarmerCrops(
-                  selectedFarmer
-                ).map((c, i) => (
-                  <span
-                    key={
-                      c.cropId ?? i
-                    }
-                    className="flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs"
-                  >
-                    {getCropIcon(
-                      c.cropName
-                    )}{" "}
-                    {c.cropName}
-                  </span>
-                ))}
-
-                {getFarmerCrops(
-                  selectedFarmer
-                ).length === 0 && (
-                  <span className="text-xs text-gray-400">
-                    —
-                  </span>
-                )}
-
-              </div>
-
+              <div
+                ref={messagesEndRef}
+                className="h-px w-full"
+                aria-hidden="true"
+              />
             </div>
-
-            <p className="truncate">
-
-              <span className="text-gray-500">
-                Wallet:
-              </span>{" "}
-
-              {selectedFarmer.walletAddress ||
-                "—"}
-
-            </p>
-
-          </div>
-
-          <button
-            onClick={openOrderModal}
-            className="mt-6 w-full rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 py-2 text-white shadow-md transition hover:scale-[1.02]"
-          >
-            Place Order 🚜
-          </button>
-
+          )}
         </div>
-      )}
 
-      {/* ORDER MODAL */}
-
-      {orderModalOpen &&
-        selectedFarmer && (
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
-
-            <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+        {/* COMPOSER */}
+        {selectedFarmer && (
+          <div
+            className="
+              shrink-0
+              border-t
+              border-[#e5ece3]
+              bg-white/65
+              p-3
+              backdrop-blur-md
+              sm:p-4
+            "
+          >
+            <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
+              <input
+                value={input}
+                onChange={(event) =>
+                  setInput(event.target.value)
+                }
+                placeholder="Type a message..."
+                className="
+                  min-w-0
+                  flex-1
+                  rounded-xl
+                  border
+                  border-[#dfe8dc]
+                  bg-white
+                  px-4
+                  py-2.5
+                  text-sm
+                  text-[#314b36]
+                  outline-none
+                  transition
+                  placeholder:text-[#a1aaa0]
+                  focus:border-[#a9c7aa]
+                  focus:ring-2
+                  focus:ring-[#dcebd9]
+                "
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    !event.shiftKey
+                  ) {
+                    event.preventDefault();
+                    sendMessage();
+                  }
+                }}
+              />
 
               <button
+                type="button"
+                onClick={sendMessage}
+                disabled={!input.trim()}
+                className="
+                  flex
+                  h-10
+                  w-10
+                  shrink-0
+                  items-center
+                  justify-center
+                  rounded-xl
+                  bg-[#28733d]
+                  text-white
+                  shadow-[0_6px_18px_rgba(40,115,61,0.15)]
+                  transition
+                  hover:bg-[#216534]
+                  disabled:cursor-not-allowed
+                  disabled:opacity-40
+                "
+                aria-label="Send message"
+              >
+                <Send size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* =========================================================
+          RIGHT — FARMER DETAILS
+          ========================================================= */}
+      {selectedFarmer && (
+        <aside
+          className="
+            hidden
+            w-[260px]
+            min-w-[230px]
+            max-w-[28%]
+            shrink-0
+            flex-col
+            border-l
+            border-[#e5ece3]
+            bg-white/50
+            lg:flex
+          "
+        >
+          {/* DETAILS HEADER */}
+          <div className="shrink-0 border-b border-[#e8eee6] px-5 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#edf6eb] text-[#4d8957]">
+                <UserRound
+                  size={18}
+                  strokeWidth={1.7}
+                />
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#9aa897]">
+                  Farmer
+                </p>
+
+                <h3 className="mt-1 truncate text-sm font-semibold text-[#193522]">
+                  {selectedFarmer.name}
+                </h3>
+              </div>
+            </div>
+          </div>
+
+          {/* DETAILS */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            <div className="space-y-6">
+              {/* LOCATION */}
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#9aa897]">
+                  Location
+                </p>
+
+                <div className="mt-2 flex items-start gap-2">
+                  <MapPin
+                    size={14}
+                    className="mt-0.5 shrink-0 text-[#6c9272]"
+                  />
+
+                  <p className="text-xs leading-5 text-[#526453]">
+                    {selectedFarmer.address ||
+                      "Location not available"}
+                  </p>
+                </div>
+              </div>
+
+              {/* CROPS */}
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#9aa897]">
+                  Registered crops
+                </p>
+
+                <div className="mt-3 divide-y divide-[#edf1eb] border-y border-[#edf1eb]">
+                  {getFarmerCrops(
+                    selectedFarmer
+                  ).map(
+                    (crop, index) => (
+                      <div
+                        key={
+                          crop.cropId ??
+                          index
+                        }
+                        className="flex items-center gap-3 py-3"
+                      >
+                        <span className="text-base">
+                          {getCropIcon(
+                            crop.cropName
+                          )}
+                        </span>
+
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold text-[#344637]">
+                            {crop.cropName}
+                          </p>
+
+                          {crop.season && (
+                            <p className="mt-0.5 text-[9px] text-[#929e91]">
+                              {crop.season}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  )}
+
+                  {getFarmerCrops(
+                    selectedFarmer
+                  ).length === 0 && (
+                    <p className="py-3 text-xs text-[#9aa897]">
+                      No crop information
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* WALLET */}
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#9aa897]">
+                  Wallet
+                </p>
+
+                <p className="mt-2 break-all rounded-xl bg-[#f7faf6] px-3 py-2.5 text-[10px] leading-4 text-[#667467]">
+                  {selectedFarmer.walletAddress ||
+                    "Wallet not available"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* ORDER */}
+          <div className="shrink-0 border-t border-[#e5ece3] p-4">
+            <button
+              type="button"
+              onClick={openOrderModal}
+              className="
+                flex
+                w-full
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                bg-[#28733d]
+                py-2.5
+                text-xs
+                font-semibold
+                text-white
+                shadow-[0_7px_18px_rgba(40,115,61,0.14)]
+                transition
+                hover:bg-[#216534]
+              "
+            >
+              <ShoppingCart size={14} />
+              Place order
+            </button>
+          </div>
+        </aside>
+      )}
+
+      {/* =========================================================
+          ORDER MODAL
+          ========================================================= */}
+      {orderModalOpen &&
+        selectedFarmer && (
+          <div
+            className="
+              fixed
+              inset-0
+              z-[1000]
+              flex
+              items-center
+              justify-center
+              bg-black/35
+              p-4
+              backdrop-blur-[3px]
+            "
+          >
+            <div
+              className="
+                relative
+                max-h-[90dvh]
+                w-full
+                max-w-md
+                overflow-y-auto
+                rounded-2xl
+                border
+                border-white
+                bg-white
+                p-6
+                shadow-[0_25px_80px_rgba(0,0,0,0.18)]
+              "
+            >
+              {/* CLOSE */}
+              <button
+                type="button"
                 onClick={() =>
                   setOrderModalOpen(false)
                 }
-                className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+                className="
+                  absolute
+                  right-4
+                  top-4
+                  flex
+                  h-8
+                  w-8
+                  items-center
+                  justify-center
+                  rounded-lg
+                  text-[#9aa897]
+                  transition
+                  hover:bg-[#f3f7f2]
+                  hover:text-[#526453]
+                "
+                aria-label="Close order modal"
               >
-                <X size={18} />
+                <X size={17} />
               </button>
 
-              <h3 className="mb-1 text-lg font-bold text-gray-800">
-                Place Order
-              </h3>
+              {/* MODAL HEADER */}
+              <div className="pr-8">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#edf6eb] text-[#4d8957]">
+                    <Package
+                      size={18}
+                      strokeWidth={1.7}
+                    />
+                  </div>
 
-              <p className="mb-4 text-xs text-gray-500">
-                with {selectedFarmer.name}
-              </p>
+                  <div>
+                    <h3 className="text-base font-semibold text-[#193522]">
+                      Place order
+                    </h3>
 
-              <div className="space-y-3">
+                    <p className="mt-0.5 text-[10px] text-[#8a9889]">
+                      With {selectedFarmer.name}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
+              {/* FORM */}
+              <div className="mt-6 space-y-4">
+                {/* CROP */}
                 <div>
-
-                  <label className="mb-1 block text-xs text-gray-500">
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#829083]">
                     Crop
                   </label>
 
                   <select
                     value={orderCropId}
-                    onChange={(e) =>
+                    onChange={(event) =>
                       setOrderCropId(
-                        e.target.value
+                        event.target.value
                       )
                     }
-                    className="w-full rounded border p-2 text-sm"
+                    className="
+                      w-full
+                      rounded-xl
+                      border
+                      border-[#dfe8dc]
+                      bg-white
+                      px-3
+                      py-2.5
+                      text-sm
+                      text-[#314b36]
+                      outline-none
+                      focus:border-[#a9c7aa]
+                      focus:ring-2
+                      focus:ring-[#dcebd9]
+                    "
                   >
-
                     {getFarmerCrops(
                       selectedFarmer
-                    ).map((c, i) => (
-                      <option
-                        key={
-                          c.cropId ?? i
-                        }
-                        value={
-                          c.cropId
-                        }
-                      >
-                        {getCropIcon(
-                          c.cropName
-                        )}{" "}
-                        {c.cropName}
-                      </option>
-                    ))}
-
+                    ).map(
+                      (crop, index) => (
+                        <option
+                          key={
+                            crop.cropId ??
+                            index
+                          }
+                          value={
+                            crop.cropId || ""
+                          }
+                        >
+                          {getCropIcon(
+                            crop.cropName
+                          )}{" "}
+                          {crop.cropName}
+                        </option>
+                      )
+                    )}
                   </select>
-
                 </div>
 
+                {/* QUANTITY */}
                 <div>
-
-                  <label className="mb-1 block text-xs text-gray-500">
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#829083]">
                     Quantity
                   </label>
 
@@ -1024,89 +1466,162 @@ export default function CompanyMessages() {
                     type="number"
                     min={1}
                     value={orderQuantity}
-                    onChange={(e) =>
+                    onChange={(event) =>
                       setOrderQuantity(
-                        e.target.value
+                        event.target.value
                       )
                     }
-                    className="w-full rounded border p-2 text-sm"
+                    className="
+                      w-full
+                      rounded-xl
+                      border
+                      border-[#dfe8dc]
+                      bg-white
+                      px-3
+                      py-2.5
+                      text-sm
+                      text-[#314b36]
+                      outline-none
+                      focus:border-[#a9c7aa]
+                      focus:ring-2
+                      focus:ring-[#dcebd9]
+                    "
                     placeholder="e.g. 50"
                   />
-
                 </div>
 
+                {/* AMOUNT */}
                 <div>
-
-                  <label className="mb-1 block text-xs text-gray-500">
-                    Amount (₹)
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#829083]">
+                    Amount
                   </label>
 
-                  <input
-                    type="number"
-                    min={1}
-                    value={orderAmount}
-                    onChange={(e) =>
-                      setOrderAmount(
-                        e.target.value
-                      )
-                    }
-                    className="w-full rounded border p-2 text-sm"
-                    placeholder="e.g. 5000"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#8a9889]">
+                      ₹
+                    </span>
 
+                    <input
+                      type="number"
+                      min={1}
+                      value={orderAmount}
+                      onChange={(event) =>
+                        setOrderAmount(
+                          event.target.value
+                        )
+                      }
+                      className="
+                        w-full
+                        rounded-xl
+                        border
+                        border-[#dfe8dc]
+                        bg-white
+                        py-2.5
+                        pl-7
+                        pr-3
+                        text-sm
+                        text-[#314b36]
+                        outline-none
+                        focus:border-[#a9c7aa]
+                        focus:ring-2
+                        focus:ring-[#dcebd9]
+                      "
+                      placeholder="e.g. 5000"
+                    />
+                  </div>
                 </div>
 
+                {/* GST */}
                 <div>
-
-                  <label className="mb-1 block text-xs text-gray-500">
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#829083]">
                     Company GSTIN
                   </label>
 
                   <input
                     type="text"
                     value={orderGst}
-                    onChange={(e) =>
+                    onChange={(event) =>
                       setOrderGst(
-                        e.target.value.toUpperCase()
+                        event.target.value.toUpperCase()
                       )
                     }
-                    className="w-full rounded border p-2 text-sm"
-                    placeholder="22AAAAA0000A1Z5"
                     maxLength={15}
+                    className="
+                      w-full
+                      rounded-xl
+                      border
+                      border-[#dfe8dc]
+                      bg-white
+                      px-3
+                      py-2.5
+                      text-sm
+                      uppercase
+                      text-[#314b36]
+                      outline-none
+                      focus:border-[#a9c7aa]
+                      focus:ring-2
+                      focus:ring-[#dcebd9]
+                    "
+                    placeholder="22AAAAA0000A1Z5"
                   />
-
                 </div>
 
+                {/* STATUS */}
                 {orderStatus && (
-                  <p
-                    className={`text-xs ${
-                      orderStatus.type ===
-                      "success"
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
+                  <div
+                    className={`
+                      rounded-xl
+                      px-3
+                      py-2.5
+                      text-xs
+                      ${
+                        orderStatus.type ===
+                        "success"
+                          ? "bg-[#edf7ee] text-[#347544]"
+                          : "bg-[#fff2f0] text-[#b44f45]"
+                      }
+                    `}
                   >
                     {orderStatus.text}
-                  </p>
+                  </div>
                 )}
 
+                {/* SUBMIT */}
                 <button
+                  type="button"
                   onClick={submitOrder}
-                  disabled={orderSubmitting}
-                  className="w-full rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  disabled={
+                    orderSubmitting
+                  }
+                  className="
+                    flex
+                    w-full
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    bg-[#28733d]
+                    py-3
+                    text-sm
+                    font-semibold
+                    text-white
+                    shadow-[0_8px_20px_rgba(40,115,61,0.15)]
+                    transition
+                    hover:bg-[#216534]
+                    disabled:cursor-not-allowed
+                    disabled:opacity-50
+                  "
                 >
+                  <ShoppingCart size={15} />
+
                   {orderSubmitting
                     ? "Placing order..."
-                    : "Confirm Order"}
+                    : "Confirm order"}
                 </button>
-
               </div>
-
             </div>
-
           </div>
         )}
-
     </div>
   );
 }

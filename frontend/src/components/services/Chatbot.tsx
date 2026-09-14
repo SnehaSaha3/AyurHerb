@@ -1,38 +1,64 @@
 import axios from "axios";
+import type { CropSummary } from "../farmer/FarmContext";
 
-interface ChatbotContext {
-  location?: string; 
-  weather?: {
-    temp?: number;
-    description?: string;
-    rainChance?: number;
-    humidity?: number;
-    windSpeed?: number;
-  };
+export interface FarmerLocation {
+  latitude?: number;
+  longitude?: number;
+  area?: string;
+  village?: string;
+  district?: string;
+  state?: string;
+  country?: string;
 }
-interface SatelliteData {
+
+export interface FarmerWeather {
+  temp?: number;
+  description?: string;
+  rainChance?: number;
+  humidity?: number;
+  windSpeed?: number;
+}
+
+export interface FarmerContext {
+  crops?: CropSummary[];
+  location?: FarmerLocation;
   moisture?: number;
-  ndvi?: number;
-  temperature?: number;
-  [key: string]: number | undefined; // allow other numeric fields
+  weather?: FarmerWeather;
 }
 
-export async function askChatbot(question: string, context?: ChatbotContext) {
-  try {
-    const res = await axios.post("http://localhost:8000/query", { question, context });
-    return res.data.answer;
-  } catch (err) {
-    console.error("Chatbot error:", err);
-    return "Error connecting to chatbot.";
-  }
+export interface AyurMateDecision {
+  action: string;
+  priority: "low" | "medium" | "high";
+  crop: string | null;
+  title: string;
+  message: string;
+  reason: string[];
+  next_steps: string[];
 }
 
-export async function getRecommendations(location: string, satelliteData?: SatelliteData) {
-  try {
-    const res = await axios.post("http://localhost:8000/recommend", { location, satellite_data: satelliteData });
-    return res.data.answer;
-  } catch (err) {
-    console.error("Recommendation error:", err);
-    return "Error fetching recommendations.";
-  }
+export interface AyurMateResponse {
+  agent: string;
+  decision: AyurMateDecision;
+}
+
+const AYURMATE_API =
+  import.meta.env.VITE_AYURMATE_API_URL ||
+  "http://localhost:8002";
+
+export async function askChatbot(
+  question: string,
+  farmer: FarmerContext = {},
+): Promise<AyurMateResponse> {
+  const response = await axios.post<AyurMateResponse>(
+    `${AYURMATE_API}/query`,
+    {
+      question,
+      farmer,
+    },
+    {
+      timeout: 60000,
+    },
+  );
+
+  return response.data;
 }

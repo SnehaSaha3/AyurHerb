@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useFarm } from "../farmer/FarmContext";
 
 export default function FarmerGreeting() {
   const [greeting, setGreeting] = useState("");
+  const { farmerName } = useFarm();
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -17,7 +19,8 @@ export default function FarmerGreeting() {
 
   return (
     <p className="text-sm font-medium text-gray-500">
-      {greeting} 👩‍🌾
+      {greeting}
+      {farmerName ? `, ${farmerName}` : ""} 👩‍🌾
     </p>
   );
 }

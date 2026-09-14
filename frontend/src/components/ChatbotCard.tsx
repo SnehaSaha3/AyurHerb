@@ -1,59 +1,49 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { askChatbot } from "./services/Chatbot";
 import type { WeatherData } from "./services/Weather";
+import type { CropSummary } from "./farmer/FarmContext"
 
-interface ChatbotCardProps {
-  farmLocation?: { lat: number; lng: number } | null;
-  weatherData?: WeatherData;
+interface FarmLocation {
+  lat: number;
+  lng: number;
 }
 
-type Message = { from: "user" | "bot" | "alert"; text: string };
+interface ChatbotCardProps {
+  farmLocation?: FarmLocation | null;
+  weatherData?: WeatherData;
+  crops?: CropSummary[];
+  avgMoisture?: number | null;
+}
+
+type Message = {
+  from: "user" | "bot";
+  text: string;
+};
 
 export default function ChatbotCard({
   farmLocation,
   weatherData,
+  crops = [],
+  avgMoisture,
 }: ChatbotCardProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       from: "bot",
-      text: "This is AyurMate 🌿, Look into your farm today ",
+      text: "This is AyurMate 🌿, Look into your farm today.",
     },
   ]);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [lastAlert, setLastAlert] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll chat to the newest message
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "nearest",
     });
   }, [messages, loading]);
-
-  // Example alert notification
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const alertText = "🌦️ Heavy rainfall expected in your area!";
-
-      if (lastAlert !== alertText) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            from: "alert",
-            text: alertText,
-          },
-        ]);
-
-        setLastAlert(alertText);
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [lastAlert]);
 
   const sendMessage = async () => {
     const trimmedInput = input.trim();
@@ -69,29 +59,73 @@ export default function ChatbotCard({
     setInput("");
     setLoading(true);
 
-    const context = {
+    /*
+     * Build the farmer context from the actual FarmContext data.
+     *
+     * This is what makes AyurMate an agricultural agent rather
+     * than a generic chatbot.
+     */
+    const farmer = {
+      crops,
+
       location: farmLocation
-        ? `${farmLocation.lat},${farmLocation.lng}`
-        : "",
-      weather: weatherData || {},
+        ? {
+            latitude: farmLocation.lat,
+            longitude: farmLocation.lng,
+          }
+        : {},
+
+      moisture: avgMoisture ?? undefined,
+
+      weather: weatherData
+        ? {
+            temp: weatherData.temp,
+            description: weatherData.description,
+            rainChance: weatherData.rainChance,
+            humidity: weatherData.humidity,
+            windSpeed: weatherData.windSpeed,
+          }
+        : {},
     };
 
+    console.log("AyurMate farmer context:", farmer);
+
     try {
-      const answer = await askChatbot(trimmedInput, context);
+      const result = await askChatbot(
+        trimmedInput,
+        farmer,
+      );
+
+      const decision = result?.decision;
+
+      if (decision) {
+        const formattedMessage = formatDecision(decision);
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            from: "bot",
+            text: formattedMessage,
+          },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            from: "bot",
+            text: "AyurMate couldn't generate a decision right now.",
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("AyurMate error:", error);
 
       setMessages((prev) => [
         ...prev,
         {
           from: "bot",
-          text: answer as string,
-        },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          from: "bot",
-          text: "Oops! Something went wrong. Please try again.",
+          text:
+            "Oops! AyurMate couldn't connect right now. Please try again.",
         },
       ]);
     } finally {
@@ -99,7 +133,9 @@ export default function ChatbotCard({
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyPress = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -124,17 +160,16 @@ export default function ChatbotCard({
           </div>
 
           <p className="text-[11px] text-gray-500">
-            Your Helping Friend 
+            Your Helping Friend
           </p>
         </div>
       </div>
 
-      {/* CHAT MESSAGES */}
+      {/* CHAT */}
       <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-gray-50/80 to-white px-3 py-4 sm:px-4">
         <div className="space-y-3">
           {messages.map((m, i) => {
             const isUser = m.from === "user";
-            const isAlert = m.from === "alert";
 
             return (
               <div
@@ -142,8 +177,6 @@ export default function ChatbotCard({
                 className={`flex ${
                   isUser
                     ? "justify-end"
-                    : isAlert
-                    ? "justify-center"
                     : "justify-start"
                 }`}
               >
@@ -151,8 +184,6 @@ export default function ChatbotCard({
                   className={`max-w-[85%] break-words rounded-2xl px-3.5 py-2.5 text-sm leading-5 shadow-sm ${
                     isUser
                       ? "rounded-br-md bg-green-600 text-white"
-                      : isAlert
-                      ? "max-w-[95%] border border-amber-200 bg-amber-50 text-center text-xs text-amber-800"
                       : "rounded-bl-md border border-gray-100 bg-white text-gray-700"
                   }`}
                 >
@@ -167,7 +198,9 @@ export default function ChatbotCard({
               <div className="rounded-2xl rounded-bl-md border border-gray-100 bg-white px-3.5 py-2.5 text-xs text-gray-400 shadow-sm">
                 <span className="inline-flex items-center gap-1">
                   AyurMate is thinking
-                  <span className="animate-pulse">•••</span>
+                  <span className="animate-pulse">
+                    •••
+                  </span>
                 </span>
               </div>
             </div>
@@ -177,7 +210,7 @@ export default function ChatbotCard({
         </div>
       </div>
 
-      {/* INPUT — ALWAYS VISIBLE */}
+      {/* INPUT */}
       <div className="shrink-0 border-t border-gray-100 bg-white p-3">
         <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-1.5 transition-all duration-200 focus-within:border-green-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-green-100">
           <input
@@ -196,7 +229,7 @@ export default function ChatbotCard({
             disabled={loading || !input.trim()}
             className="shrink-0 rounded-xl bg-green-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-200 hover:bg-green-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Send
+            {loading ? "..." : "Send"}
           </button>
         </div>
 
@@ -206,4 +239,43 @@ export default function ChatbotCard({
       </div>
     </div>
   );
+}
+
+
+/**
+ * Convert AyurMate's structured agent decision
+ * into the simple chat message currently used by the UI.
+ */
+function formatDecision(decision: {
+  action?: string;
+  priority?: string;
+  crop?: string | null;
+  title?: string;
+  message?: string;
+  reason?: string[];
+  next_steps?: string[];
+}) {
+  const parts: string[] = [];
+
+  if (decision.title) {
+    parts.push(decision.title);
+  }
+
+  if (decision.message) {
+    parts.push(decision.message);
+  }
+
+  if (decision.reason?.length) {
+    parts.push(
+      `Why: ${decision.reason.join(" ")}`,
+    );
+  }
+
+  if (decision.next_steps?.length) {
+    parts.push(
+      `Next: ${decision.next_steps.join(" ")}`,
+    );
+  }
+
+  return parts.join("\n\n");
 }

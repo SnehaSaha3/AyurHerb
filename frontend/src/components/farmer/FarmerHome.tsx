@@ -59,7 +59,7 @@ export default function FarmerHome() {
           <FarmerGreeting />
 
           <h1 className="mt-1.5 text-3xl font-bold leading-tight tracking-tight text-[#16321f] sm:text-4xl">
-            Grow Better, Together
+            Lets's Build, Together
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-[#4d6152]">

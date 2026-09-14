@@ -26,7 +26,7 @@ interface FarmContextValue {
   crops: CropSummary[];
   loading: boolean;
   farmLocation: { lat: number; lng: number } | null;
-  avgMoisture: number;
+  avgMoisture: number | undefined
   geoTagged: number;
   weatherData: WeatherData | undefined;
   setWeatherData: (data: WeatherData | undefined) => void;
@@ -110,7 +110,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       .map((crop) => crop.moisture)
       .filter((value): value is number => typeof value === "number");
 
-    if (!values.length) return 0;
+    if (!values.length) return undefined;
     return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
   }, [crops]);
 
