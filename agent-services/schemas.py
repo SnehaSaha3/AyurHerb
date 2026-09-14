@@ -1,6 +1,6 @@
 from pydantic import BaseModel , Field
 from typing import Optional, List
-
+from datetime import datetime
 class VerifyCompanyRequest(BaseModel):
     gstNumber: str
 
@@ -60,6 +60,7 @@ class FraudCheckResponse(BaseModel):
 class InvoiceRequest(BaseModel):
     orderId: str
     invoiceNumber: str
+    transactionAt: datetime
     companyName: str
     companyGstNumber: str
     farmerName: str
