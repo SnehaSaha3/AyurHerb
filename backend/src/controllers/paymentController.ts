@@ -338,7 +338,7 @@ export async function verifyPayment(
        escrow can be funded.
     ======================================================== */
 
-    const {
+        const {
       txHash: confirmedTxHash,
     } = await logConfirmedOrderOnChain({
       orderId: order.id,
@@ -352,6 +352,10 @@ export async function verifyPayment(
       cropName: order.cropName,
 
       quantity: order.quantity,
+
+      unitPricePaise: Math.round(
+        (order.pricing?.unitPrice ?? 0) * 100
+      ),
 
       amount: order.amount,
     });
@@ -453,7 +457,7 @@ export async function generateInvoiceAndReleaseShipmentTranche(
     generateQrToken();
 
   const verifyUrl =
-    `${BASE_URL}/api/public/verify/${order.id}/${qrToken}`;
+    `${BASE_URL}/api/public/verify/${order.id}/${qrToken}/pdf`;
 
   const qrCodeDataUrl =
     await generateQrCodeDataUrl(

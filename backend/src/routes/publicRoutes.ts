@@ -1,5 +1,8 @@
 import { Router, Response } from "express";
 import Order from "../models/order";
+import {
+  generatePublicProvenancePdf,
+} from "../controllers/publicVerificationController";
 
 const router = Router();
 
@@ -111,68 +114,11 @@ router.get(
  * 9bc52d9ec2b4e66d7a9218e4e9e7f632/
  * pdf
  */
+
+
 router.get(
   "/verify/:orderId/:qrToken/pdf",
-  async (req: any, res: Response) => {
-    try {
-      const { orderId, qrToken } = req.params;
-
-      const order = await Order.findById(orderId).lean();
-
-      if (!order) {
-        return res.status(404).json({
-          success: false,
-          error: "Invalid or expired verification link",
-        });
-      }
-
-      const invoice = order.invoice;
-
-      if (!invoice || invoice.qrToken !== qrToken) {
-        return res.status(404).json({
-          success: false,
-          error: "Invalid or expired verification link",
-        });
-      }
-
-      if (!invoice.invoicePdfBase64) {
-        return res.status(404).json({
-          success: false,
-          error: "Invoice PDF is not available",
-        });
-      }
-
-      const pdfBuffer = Buffer.from(
-        invoice.invoicePdfBase64,
-        "base64"
-      );
-
-      res.setHeader(
-        "Content-Type",
-        "application/pdf"
-      );
-
-      res.setHeader(
-        "Content-Disposition",
-        `inline; filename="${invoice.invoiceNumber}.pdf"`
-      );
-
-      res.setHeader(
-        "Content-Length",
-        pdfBuffer.length
-      );
-
-      return res.send(pdfBuffer);
-
-    } catch (err: any) {
-      console.error("Public invoice PDF error:", err);
-
-      return res.status(500).json({
-        success: false,
-        error: "Server error",
-      });
-    }
-  }
+  generatePublicProvenancePdf
 );
 
 export default router;

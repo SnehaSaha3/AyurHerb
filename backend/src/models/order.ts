@@ -16,6 +16,7 @@ export type OrderStatus =
   | "rejected";
 
 export type TrancheType = "shipment" | "delivery";
+export type PricingSource = "agent" | "company_override";
 
 export interface ITranche {
   type: TrancheType;
@@ -35,7 +36,27 @@ export interface IOrder extends Document {
   amount: number;   
   status: OrderStatus;
 
-  
+  pricing?: {
+    unitPrice: number;
+    source: PricingSource;
+    agentSuggestedUnitPrice: number | null;
+    isClearanceOrder: boolean;
+    opportunity: {
+      status: string;
+      score: number | null;
+      label: string;
+      differenceFromModalPercent: number | null;
+    };
+    marketReference?: {
+      min: number;
+      max: number;
+      modal: number;
+      average: number;
+      unit: string;
+      updatedAt: string;
+    };
+  };
+
   fees?: {
     platformFeePercent: number;
     platformFeeAmount: number;
@@ -58,10 +79,8 @@ export interface IOrder extends Document {
     reason?: string;
   };
 
-  
   chainTxHash?: string;
 
- 
   escrow: {
     razorpayOrderId?: string;
     razorpayPaymentId?: string;
@@ -72,8 +91,6 @@ export interface IOrder extends Document {
     escrowChainTxHash?: string;   
   };
 
-  
-  
   fraudCheck?: {
     riskScore: number;
     requiresAdminReview: boolean;
@@ -83,7 +100,6 @@ export interface IOrder extends Document {
     checkedAt: Date;
   };
 
-  
   adminReview?: {
     decision: "pending" | "approved" | "held";
     reviewedBy?: mongoose.Types.ObjectId;
@@ -126,6 +142,27 @@ const orderSchema = new Schema<IOrder>(
     quantity: { type: Number, required: true },
     amount: { type: Number, required: true },
     status: { type: String, default: "pending_verification" },
+
+    pricing: {
+      unitPrice: { type: Number },
+      source: { type: String, enum: ["agent", "company_override"] },
+      agentSuggestedUnitPrice: { type: Number },
+      isClearanceOrder: { type: Boolean },
+      opportunity: {
+        status: { type: String },
+        score: { type: Number },
+        label: { type: String },
+        differenceFromModalPercent: { type: Number },
+      },
+      marketReference: {
+        min: { type: Number },
+        max: { type: Number },
+        modal: { type: Number },
+        average: { type: Number },
+        unit: { type: String },
+        updatedAt: { type: String },
+      },
+    },
 
     fees: {
       platformFeePercent: { type: Number },

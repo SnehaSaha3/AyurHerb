@@ -33,6 +33,7 @@ const orderLog = new ethers.Contract(
     farmer: string,
     cropName: string,
     quantity: bigint,
+    unitPrice: bigint,
     amount: bigint,
     overrides?: { nonce?: number }
   ): Promise<ethers.ContractTransactionResponse>;
@@ -203,6 +204,10 @@ function validateString(value: string, fieldName: string): void {
 
    Must run before logEscrowFundedOnChain — the contract requires
    the order to already be confirmed before escrow can be funded.
+
+   unitPrice is the agreed price per kg, scaled to paise (same
+   scale convention as amountPaidPaise) since Solidity has no
+   decimals: ₹975.00/kg is sent on-chain as 97500.
    ============================================================ */
 
 export async function logConfirmedOrderOnChain(payload: {
@@ -211,9 +216,10 @@ export async function logConfirmedOrderOnChain(payload: {
   farmerAddr: string;
   cropName: string;
   quantity: number;
+  unitPricePaise: number;
   amount: number;
 }): Promise<{ txHash: string }> {
-  const { orderId, companyAddr, farmerAddr, cropName, quantity, amount } = payload;
+  const { orderId, companyAddr, farmerAddr, cropName, quantity, unitPricePaise, amount } = payload;
 
   validateOrderLogAddress();
   validateString(orderId, "orderId");
@@ -221,9 +227,11 @@ export async function logConfirmedOrderOnChain(payload: {
   validateAddress(companyAddr, "company address");
   validateAddress(farmerAddr, "farmer address");
   validatePositiveNumber(quantity, "quantity");
+  validatePositiveNumber(unitPricePaise, "unitPricePaise");
   validatePositiveNumber(amount, "amount");
 
   const quantityBigInt = BigInt(Math.round(quantity));
+  const unitPriceBigInt = BigInt(Math.round(unitPricePaise));
   const amountBigInt = BigInt(Math.round(amount));
 
   return enqueueWalletTx(async (nonce) => {
@@ -233,6 +241,7 @@ export async function logConfirmedOrderOnChain(payload: {
       farmerAddr,
       cropName,
       quantityBigInt,
+      unitPriceBigInt,
       amountBigInt,
       { nonce }
     );
