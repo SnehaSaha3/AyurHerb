@@ -1,69 +1,86 @@
+from pathlib import Path
+
 from reportlab.lib.colors import HexColor
-from reportlab.graphics.shapes import Drawing, Path, String
+from reportlab.platypus import Image
+
 
 """
-Central brand definition — every generated document (invoice now,
-future reports/certificates) pulls from here so the look stays
-consistent without re-specifying colors per file.
+Central brand definition — every generated document uses the
+same AyurHerb branding.
 
-PLACEHOLDER LOGO: I don't have your actual AyurHerb logo asset, so
-draw_logo() below renders a simple programmatic leaf mark + wordmark
-as a stand-in. The moment you have a real logo file (PNG/SVG), replace
-draw_logo() with:
-
-    from reportlab.platypus import Image
-    def get_logo_flowable(width=120):
-        return Image("assets/ayurherb_logo.png", width=width, height=width * 0.4)
-
-...and swap its usage in invoice_pdf.py accordingly. Nothing else in
-the invoice layout needs to change — logo placement is already
-isolated to one spot in the letterhead.
+The logo is the ORIGINAL AyurHerb logo:
+frontend/src/assets/logo-transparent.png
 """
 
 BRAND_NAME = "AyurHerb"
 BRAND_TAGLINE = "Traceable Herbs. Verified Farms."
 
-# Herbal green palette — adjust to your real brand guide when you have one.
-# Plain hex strings (for Paragraph <font color="..."> tags, which need a
-# bare hex string, not a reportlab Color object) live alongside the Color
-# objects (for Table/Drawing styling, which need the objects).
+# Herbal green palette
 HEX_PRIMARY = "#1F5C3F"
 HEX_ACCENT = "#8FB996"
 HEX_DARK = "#12241A"
 HEX_MUTED = "#6B7A70"
 HEX_BG_STRIP = "#EFF5F1"
 
-COLOR_PRIMARY = HexColor(HEX_PRIMARY)     # deep herb green
-COLOR_ACCENT = HexColor(HEX_ACCENT)       # sage
-COLOR_DARK = HexColor(HEX_DARK)           # near-black green, for body text
-COLOR_MUTED = HexColor(HEX_MUTED)         # muted gray-green, for secondary text
-COLOR_BG_STRIP = HexColor(HEX_BG_STRIP)   # very light background band
+COLOR_PRIMARY = HexColor(HEX_PRIMARY)
+COLOR_ACCENT = HexColor(HEX_ACCENT)
+COLOR_DARK = HexColor(HEX_DARK)
+COLOR_MUTED = HexColor(HEX_MUTED)
+COLOR_BG_STRIP = HexColor(HEX_BG_STRIP)
 
 
-def draw_logo(x: float, y: float, size: float = 36) -> Drawing:
-    """A simple leaf-mark placeholder. Returns a Drawing positioned at (x, y)."""
-    d = Drawing(size * 2, size)
+# ============================================================
+# ORIGINAL AYURHERB LOGO
+# ============================================================
 
-    leaf = Path(fillColor=COLOR_PRIMARY, strokeColor=None)
-    leaf.moveTo(size * 0.1, size * 0.1)
-    leaf.curveTo(size * 0.1, size * 0.8, size * 0.6, size, size * 0.95, size * 0.95)
-    leaf.curveTo(size * 0.9, size * 0.5, size * 0.6, size * 0.1, size * 0.1, size * 0.1)
-    leaf.closePath()
-    d.add(leaf)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-    vein = Path(strokeColor=COLOR_BG_STRIP, strokeWidth=1.5, fillColor=None)
-    vein.moveTo(size * 0.2, size * 0.15)
-    vein.lineTo(size * 0.75, size * 0.85)
-    d.add(vein)
+LOGO_PATH = (
+    PROJECT_ROOT
+    / "frontend"
+    / "src"
+    / "assets"
+    / "logo-transparent.png"
+)
 
-    d.add(
-        String(
-            size * 1.15, size * 0.32,
-            BRAND_NAME,
-            fontName="Helvetica-Bold",
-            fontSize=size * 0.5,
-            fillColor=COLOR_PRIMARY,
+
+def get_logo(width: float = 120):
+    """
+    Return the original AyurHerb PNG logo.
+
+    The logo asset is shared with the frontend so generated
+    documents use the actual brand identity.
+    """
+
+    if not LOGO_PATH.exists():
+        raise FileNotFoundError(
+            f"AyurHerb logo not found at: {LOGO_PATH}"
         )
+
+    # Preserve the PNG's aspect ratio.
+    from PIL import Image as PILImage
+
+    with PILImage.open(LOGO_PATH) as img:
+        original_width, original_height = img.size
+
+    aspect_ratio = original_height / original_width
+    height = width * aspect_ratio
+
+    return Image(
+        str(LOGO_PATH),
+        width=width,
+        height=height,
     )
 
-    return d
+
+def draw_logo(x: float = 0, y: float = 0, size: float = 36):
+    """
+    Compatibility wrapper for the existing invoice layout.
+
+    The old implementation drew a placeholder logo.
+    This now returns the ORIGINAL AyurHerb PNG.
+    """
+
+    # Existing invoice calls draw_logo(size=30).
+    # Keep that call working without changing invoice_pdf.py.
+    return get_logo(width=size * 3.5)

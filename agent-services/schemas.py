@@ -104,3 +104,29 @@ class LogisticsResponse(BaseModel):
     reason: str
     confidence: float = 0
     agent: str = "logistics"
+
+
+
+# ── Market Price Agent ─────────────────────────────────────────────
+
+class MarketPriceRequest(BaseModel):
+    cropName: str
+    state: Optional[str] = None
+    district: Optional[str] = None
+    companyOfferPrice: Optional[float] = Field(default=None, gt=0)
+
+
+class MarketPriceResponse(BaseModel):
+    cropName: str
+    unit: str
+
+    market: dict
+
+    companyOffer: Optional[dict] = None
+
+    opportunity: dict
+
+    recommendation: dict
+
+    source: str
+    updatedAt: str

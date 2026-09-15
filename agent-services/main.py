@@ -7,6 +7,8 @@ from routes.escrow_router import router as escrow_router
 from agents.logistic_agent import run_logistics_agent
 from schemas import LogisticsRequest, LogisticsResponse
 
+from routes.market_router import router as market_router
+
 from schemas import (
     VerifyCompanyRequest,
     VerifyCompanyResponse,
@@ -64,4 +66,5 @@ async def assign_logistics(
 
 app.include_router(report_router, prefix="/reports")
 app.include_router(escrow_router, prefix="/escrow")
+app.include_router(market_router)
 
