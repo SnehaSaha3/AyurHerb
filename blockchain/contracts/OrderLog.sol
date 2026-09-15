@@ -9,6 +9,7 @@ contract OrderLog {
         address farmer;
         string cropName;
         uint256 quantity;
+        uint256 unitPrice;
         uint256 amount;
         uint256 timestamp;
     }
@@ -47,6 +48,7 @@ contract OrderLog {
         address indexed farmer,
         string cropName,
         uint256 quantity,
+        uint256 unitPrice,
         uint256 amount,
         uint256 timestamp
     );
@@ -75,6 +77,7 @@ contract OrderLog {
         address farmer,
         string calldata cropName,
         uint256 quantity,
+        uint256 unitPrice,
         uint256 amount
     ) external {
         require(
@@ -87,6 +90,7 @@ contract OrderLog {
             farmer: farmer,
             cropName: cropName,
             quantity: quantity,
+            unitPrice: unitPrice,
             amount: amount,
             timestamp: block.timestamp
         });
@@ -97,6 +101,7 @@ contract OrderLog {
             farmer,
             cropName,
             quantity,
+            unitPrice,
             amount,
             block.timestamp
         );
