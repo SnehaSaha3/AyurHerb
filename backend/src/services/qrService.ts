@@ -12,8 +12,10 @@ export async function generateQrCodeDataUrl(
   const baseUrl =
     process.env.PUBLIC_APP_URL || "http://localhost:8000";
 
+  // The physical QR remains permanent.
+  // The PDF generated at this URL reflects the CURRENT order state.
   const verifyUrl =
-    `${baseUrl}/api/public/verify/${orderId}/${qrToken}`;
+    `${baseUrl}/api/public/verify/${orderId}/${qrToken}/pdf`;
 
   return QRCode.toDataURL(verifyUrl, {
     errorCorrectionLevel: "M",

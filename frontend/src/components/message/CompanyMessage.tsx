@@ -45,6 +45,25 @@ interface Farmer {
   crops?: CropEntry[];
 }
 
+interface MarketOpportunity {
+  status: string;
+  score: number | null;
+  label: string;
+  differenceFromModalPercent: number | null;
+}
+
+interface MarketPreview {
+  cropName: string;
+  unit: string;
+  market: {
+    min?: number;
+    max?: number;
+    modal?: number;
+    average?: number;
+  };
+  opportunity: MarketOpportunity;
+}
+
 const CROP_ICONS: Record<string, string> = {
   ashwagandha: "🌿",
   tulsi: "🍃",
@@ -71,6 +90,36 @@ function getFarmerCrops(farmer: Farmer): CropEntry[] {
 
   return [];
 }
+
+const OPPORTUNITY_LABELS: Record<
+  string,
+  { text: string; className: string }
+> = {
+  STRONG: {
+    text: "Strong opportunity",
+    className: "bg-emerald-100 text-emerald-700",
+  },
+  GOOD: {
+    text: "Good opportunity",
+    className: "bg-green-100 text-green-700",
+  },
+  FAIR: {
+    text: "Fair opportunity",
+    className: "bg-yellow-100 text-yellow-700",
+  },
+  LOW: {
+    text: "Below market range",
+    className: "bg-red-100 text-red-700",
+  },
+  REFERENCE: {
+    text: "Market reference",
+    className: "bg-blue-100 text-blue-700",
+  },
+  UNAVAILABLE: {
+    text: "No market data",
+    className: "bg-gray-100 text-gray-500",
+  },
+};
 
 export default function CompanyMessages() {
   const [searchParams] = useSearchParams();
@@ -113,8 +162,14 @@ export default function CompanyMessages() {
   const [orderQuantity, setOrderQuantity] =
     useState("");
 
-  const [orderAmount, setOrderAmount] =
+  const [orderCompanyOfferPrice, setOrderCompanyOfferPrice] =
     useState("");
+
+  const [marketPreview, setMarketPreview] =
+    useState<MarketPreview | null>(null);
+
+  const [marketLoading, setMarketLoading] =
+    useState(false);
 
   const [orderGst, setOrderGst] =
     useState("");
@@ -361,6 +416,93 @@ export default function CompanyMessages() {
   ]);
 
   /*
+   * Live market preview — refetches whenever the selected crop
+   * or the optional company offer changes. The agent decides
+   * whether an offer actually gets used at order-creation time;
+   * this call is preview-only and never creates anything.
+   */
+  useEffect(() => {
+    if (
+      !orderModalOpen ||
+      !selectedFarmer ||
+      !orderCropId
+    ) {
+      setMarketPreview(null);
+      return;
+    }
+
+    const crop = getFarmerCrops(
+      selectedFarmer
+    ).find(
+      (c) => c.cropId === orderCropId
+    );
+
+    if (!crop) {
+      setMarketPreview(null);
+      return;
+    }
+
+    const token =
+      localStorage.getItem(
+        "companyToken"
+      );
+
+    if (!token) return;
+
+    const offer = orderCompanyOfferPrice.trim()
+      ? Number(orderCompanyOfferPrice)
+      : null;
+
+    let cancelled = false;
+    setMarketLoading(true);
+
+    const timer = setTimeout(() => {
+      axios
+        .post(
+          "http://localhost:8000/api/orders/market-preview",
+          {
+            cropName: crop.cropName,
+            companyOfferPrice: offer,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        )
+        .then((res) => {
+          if (cancelled) return;
+
+          if (res.data.success) {
+            setMarketPreview(res.data.data);
+          } else {
+            setMarketPreview(null);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setMarketPreview(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setMarketLoading(false);
+          }
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    orderModalOpen,
+    orderCropId,
+    orderCompanyOfferPrice,
+    selectedFarmer,
+  ]);
+
+  /*
    * Send message.
    */
   const sendMessage = () => {
@@ -434,7 +576,8 @@ export default function CompanyMessages() {
     );
 
     setOrderQuantity("");
-    setOrderAmount("");
+    setOrderCompanyOfferPrice("");
+    setMarketPreview(null);
     setOrderGst("");
     setOrderStatus(null);
     setOrderModalOpen(true);
@@ -458,12 +601,29 @@ export default function CompanyMessages() {
     if (
       !chosenCrop ||
       !orderQuantity ||
-      !orderAmount ||
       !orderGst.trim()
     ) {
       setOrderStatus({
         type: "error",
         text: "Fill in all fields before placing the order.",
+      });
+
+      return;
+    }
+
+    const opportunityStatus =
+      marketPreview?.opportunity.status;
+
+    const needsManualPrice =
+      opportunityStatus === "UNAVAILABLE";
+
+    if (
+      needsManualPrice &&
+      !orderCompanyOfferPrice.trim()
+    ) {
+      setOrderStatus({
+        type: "error",
+        text: "No market reference is available for this crop — enter a price to continue.",
       });
 
       return;
@@ -502,8 +662,12 @@ export default function CompanyMessages() {
           quantity:
             Number(orderQuantity),
 
-          amount:
-            Number(orderAmount),
+          companyOfferPrice:
+            orderCompanyOfferPrice.trim()
+              ? Number(
+                  orderCompanyOfferPrice
+                )
+              : null,
 
           gstNumber:
             orderGst.trim(),
@@ -566,6 +730,50 @@ export default function CompanyMessages() {
       </div>
     );
   }
+
+  const opportunityStatus =
+    marketPreview?.opportunity.status;
+
+  const selectedCrop =
+    selectedFarmer &&
+    getFarmerCrops(selectedFarmer).find(
+      (c) => c.cropId === orderCropId
+    );
+
+  const availableStock =
+    selectedCrop?.quantity;
+
+  const isClearanceEligible =
+    availableStock !== undefined &&
+    availableStock > 0 &&
+    Number(orderQuantity || 0) >=
+      availableStock;
+
+  /*
+   * A manual offer only actually gets used when the agent
+   * reports UNAVAILABLE, or LOW *and* the order clears the
+   * farmer's full remaining stock. This mirrors the backend
+   * rule in /api/orders/create — it's preview-only, the
+   * backend re-checks it authoritatively.
+   */
+  const manualPriceApplies =
+    opportunityStatus === "UNAVAILABLE" ||
+    (opportunityStatus === "LOW" &&
+      isClearanceEligible);
+
+  const effectiveUnitPrice =
+    manualPriceApplies &&
+    orderCompanyOfferPrice.trim()
+      ? Number(orderCompanyOfferPrice)
+      : marketPreview?.market.modal;
+
+  const estimatedTotal =
+    effectiveUnitPrice &&
+    orderQuantity &&
+    Number(orderQuantity) > 0
+      ? effectiveUnitPrice *
+        Number(orderQuantity)
+      : null;
 
   return (
     <div
@@ -1460,6 +1668,13 @@ export default function CompanyMessages() {
                 <div>
                   <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#829083]">
                     Quantity
+                    {availableStock !==
+                      undefined && (
+                      <span className="ml-1 normal-case text-[9px] font-normal text-[#a1aaa0]">
+                        ({availableStock} kg
+                        available)
+                      </span>
+                    )}
                   </label>
 
                   <input
@@ -1490,10 +1705,98 @@ export default function CompanyMessages() {
                   />
                 </div>
 
-                {/* AMOUNT */}
+                {/* MARKET PRICE REFERENCE */}
+                <div className="rounded-xl border border-[#dfe8dc] bg-[#f7faf6] p-3.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#829083]">
+                      Market price
+                    </span>
+
+                    {marketPreview?.opportunity && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          OPPORTUNITY_LABELS[
+                            marketPreview
+                              .opportunity
+                              .status
+                          ]?.className ||
+                          "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {OPPORTUNITY_LABELS[
+                          marketPreview
+                            .opportunity
+                            .status
+                        ]?.text ||
+                          marketPreview
+                            .opportunity
+                            .label}
+                      </span>
+                    )}
+                  </div>
+
+                  {marketLoading && (
+                    <p className="mt-2 text-xs text-[#8a9889]">
+                      Checking market reference...
+                    </p>
+                  )}
+
+                  {!marketLoading &&
+                    marketPreview &&
+                    marketPreview.market
+                      .modal !== undefined && (
+                      <p className="mt-2 text-sm font-semibold text-[#193522]">
+                        ₹
+                        {
+                          marketPreview
+                            .market.modal
+                        }
+                        /kg{" "}
+                        <span className="text-xs font-normal text-[#8a9889]">
+                          agent-set price
+                        </span>
+                      </p>
+                    )}
+
+                  {!marketLoading &&
+                    marketPreview &&
+                    marketPreview.market
+                      .modal === undefined && (
+                      <p className="mt-2 text-xs text-[#b44f45]">
+                        No market reference for
+                        this crop — enter a
+                        price below.
+                      </p>
+                    )}
+
+                  {!marketLoading &&
+                    !marketPreview && (
+                      <p className="mt-2 text-xs text-[#8a9889]">
+                        Select a crop to see
+                        the market reference.
+                      </p>
+                    )}
+
+                  {estimatedTotal !== null && (
+                    <p className="mt-1.5 text-xs text-[#526453]">
+                      Estimated total: ₹
+                      {estimatedTotal.toLocaleString(
+                        "en-IN"
+                      )}
+                    </p>
+                  )}
+                </div>
+
+                {/* MANUAL OFFER — only takes effect when the
+                    agent reports UNAVAILABLE, or LOW *and* the
+                    order clears the farmer's full remaining stock */}
                 <div>
                   <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#829083]">
-                    Amount
+                    Your offer{" "}
+                    {opportunityStatus ===
+                    "UNAVAILABLE"
+                      ? "(required — no market data)"
+                      : "(optional)"}
                   </label>
 
                   <div className="relative">
@@ -1504,9 +1807,11 @@ export default function CompanyMessages() {
                     <input
                       type="number"
                       min={1}
-                      value={orderAmount}
+                      value={
+                        orderCompanyOfferPrice
+                      }
                       onChange={(event) =>
-                        setOrderAmount(
+                        setOrderCompanyOfferPrice(
                           event.target.value
                         )
                       }
@@ -1526,9 +1831,44 @@ export default function CompanyMessages() {
                         focus:ring-2
                         focus:ring-[#dcebd9]
                       "
-                      placeholder="e.g. 5000"
+                      placeholder="per kg"
                     />
                   </div>
+
+                  {orderCompanyOfferPrice.trim() &&
+                    opportunityStatus ===
+                      "LOW" && (
+                      <p className="mt-1.5 text-[10px] text-[#8a9889]">
+                        {isClearanceEligible
+                          ? "Clearance order — this offer will be used."
+                          : `Below-market offers are only accepted when ordering the farmer's full remaining stock${
+                              availableStock !==
+                              undefined
+                                ? ` (${availableStock} kg)`
+                                : ""
+                            }. Otherwise the market price${
+                              marketPreview
+                                ?.market.modal !==
+                              undefined
+                                ? ` (₹${marketPreview.market.modal}/kg)`
+                                : ""
+                            } will be charged.`}
+                      </p>
+                    )}
+
+                  {orderCompanyOfferPrice.trim() &&
+                    opportunityStatus &&
+                    opportunityStatus !==
+                      "LOW" &&
+                    opportunityStatus !==
+                      "UNAVAILABLE" && (
+                      <p className="mt-1.5 text-[10px] text-[#8a9889]">
+                        This offer won't be
+                        used — the agent's
+                        market price will be
+                        charged instead.
+                      </p>
+                    )}
                 </div>
 
                 {/* GST */}
