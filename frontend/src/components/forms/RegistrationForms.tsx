@@ -29,7 +29,9 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
     password: "",
     address: "",
     herb: "",
-    location: "",
+    soilType: "",
+    season: "",
+    quantity: "",
   });
 
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -66,8 +68,29 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleContactChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
+    setFormData((prev) => ({ ...prev, contact: digitsOnly }));
+  };
+
+  const isContactValid = (contact: string) => /^[6-9]\d{9}$/.test(contact);
+
+  const isQuantityValid = (quantity: string) =>
+    quantity !== "" && !isNaN(Number(quantity)) && Number(quantity) >= 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isContactValid(formData.contact)) {
+      setMessage("❌ Enter a valid 10-digit Indian mobile number");
+      return;
+    }
+
+    if (role === "farmer" && !isQuantityValid(formData.quantity)) {
+      setMessage("❌ Enter a valid crop quantity (0 or more)");
+      return;
+    }
+
     setLoading(true);
     try {
       const url =
@@ -77,8 +100,26 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
 
       const payload =
         role === "farmer"
-          ? { ...formData, lat: coords?.lat, lng: coords?.lng }
-          : formData;
+          ? {
+              name: formData.name,
+              contact: formData.contact,
+              email: formData.email,
+              password: formData.password,
+              address: formData.address,
+              herb: formData.herb,
+              soilType: formData.soilType,
+              season: formData.season,
+              quantity: Number(formData.quantity),
+              lat: coords?.lat,
+              lng: coords?.lng,
+            }
+          : {
+              name: formData.name,
+              contact: formData.contact,
+              email: formData.email,
+              password: formData.password,
+              address: formData.address,
+            };
 
       const res = await fetch(url, {
         method: "POST",
@@ -93,21 +134,29 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
 
       const data = await res.json();
 
-      
-localStorage.setItem("token", data.token);
+      localStorage.setItem("token", data.token);
 
-
-if (role === "farmer") {
-  localStorage.setItem("farmerToken", data.token);
-  localStorage.setItem("farmer", JSON.stringify(data.farmer));
-} else {
-  localStorage.setItem("companyToken", data.token);
-  localStorage.setItem("company", JSON.stringify(data.company));
-}
+      if (role === "farmer") {
+        localStorage.setItem("farmerToken", data.token);
+        localStorage.setItem("farmer", JSON.stringify(data.farmer));
+      } else {
+        localStorage.setItem("companyToken", data.token);
+        localStorage.setItem("company", JSON.stringify(data.company));
+      }
 
       setMessage("✅ Registration successful!");
       setRegisteredData(data[role]);
-      setFormData({ name: "", contact: "", email: "", password: "", address: "", herb: "", location: "" });
+      setFormData({
+        name: "",
+        contact: "",
+        email: "",
+        password: "",
+        address: "",
+        herb: "",
+        soilType: "",
+        season: "",
+        quantity: "",
+      });
 
       setTimeout(() => navigate(`/${role}-dashboard`), 1500);
     } catch (err: unknown) {
@@ -120,6 +169,8 @@ if (role === "farmer") {
       setLoading(false);
     }
   };
+
+  const contactHasError = formData.contact.length === 10 && !isContactValid(formData.contact);
 
   return (
     <div className="p-6 max-w-md mx-auto bg-white shadow-md rounded">
@@ -142,18 +193,21 @@ if (role === "farmer") {
           required
         />
 
-       <input
-         type="tel"
-         name="contact"
-         placeholder="Contact Number"
-         value={formData.contact}
-         onChange={handleChange}
-         className="border p-2 w-full rounded"
-         required
-         inputMode="numeric"
-         pattern="[0-9]{10}"
-         maxLength={10}
-       />
+        <input
+          type="tel"
+          name="contact"
+          placeholder="Contact Number"
+          value={formData.contact}
+          onChange={handleContactChange}
+          className={`border p-2 w-full rounded ${contactHasError ? "border-red-500" : ""}`}
+          required
+          inputMode="numeric"
+          maxLength={10}
+        />
+        {contactHasError && (
+          <p className="text-xs text-red-600 -mt-2">This doesn't look like a valid mobile number</p>
+        )}
+
         <input
           type="email"
           name="email"
@@ -186,20 +240,53 @@ if (role === "farmer") {
         />
 
         {role === "farmer" && (
-          <select
-            name="herb"
-            value={formData.herb}
-            onChange={handleChange}
-            className="border p-2 w-full rounded"
-            required
-          >
-            <option value="">-- Select Herb --</option>
-            {cropOptions?.map((crop) => (
-              <option key={crop} value={crop}>
-                {crop}
-              </option>
-            ))}
-          </select>
+          <>
+            <select
+              name="herb"
+              value={formData.herb}
+              onChange={handleChange}
+              className="border p-2 w-full rounded"
+              required
+            >
+              <option value="">-- Select Herb --</option>
+              {cropOptions?.map((crop) => (
+                <option key={crop} value={crop}>
+                  {crop}
+                </option>
+              ))}
+            </select>
+
+            <input
+              type="text"
+              name="soilType"
+              placeholder="Soil Type"
+              value={formData.soilType}
+              onChange={handleChange}
+              className="border p-2 w-full rounded"
+              required
+            />
+
+            <input
+              type="text"
+              name="season"
+              placeholder="Season"
+              value={formData.season}
+              onChange={handleChange}
+              className="border p-2 w-full rounded"
+              required
+            />
+
+            <input
+              type="number"
+              name="quantity"
+              min="0"
+              placeholder="Quantity (kg)"
+              value={formData.quantity}
+              onChange={handleChange}
+              className="border p-2 w-full rounded"
+              required
+            />
+          </>
         )}
 
         <button

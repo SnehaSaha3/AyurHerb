@@ -5,9 +5,11 @@ import Farmer from "../models/farmer";
 import Order from "../models/order";
 import Message from "../models/message";
 import Company from "../models/company";
+import { Crop } from "../models/crop";
 import { sendRegistrationEmail } from "../services/EmailService";
 import { ethers } from "ethers";
 import { encryptPrivateKey } from "../utils/walletCrypto";
+import { upsertCropOnChain } from "./cropController";
 
 /* ============================================================
    FARMER REGISTER
@@ -31,6 +33,9 @@ export const registerFarmer = async (
       password,
       address,
       herb,
+      soilType,
+      season,
+      quantity,
       lat,
       lng,
     } = req.body;
@@ -39,6 +44,18 @@ export const registerFarmer = async (
       return res.status(400).json({
         error:
           "name, email, password & herb are required",
+      });
+    }
+
+    if (
+      quantity === undefined ||
+      quantity === null ||
+      isNaN(Number(quantity)) ||
+      Number(quantity) < 0
+    ) {
+      return res.status(400).json({
+        error:
+          "quantity is required and must be a non-negative number",
       });
     }
 
@@ -82,6 +99,29 @@ export const registerFarmer = async (
       !Number.isNaN(parsedLat) &&
       !Number.isNaN(parsedLng);
 
+    let startingCropId = "";
+
+    if (hasValidLocation) {
+      try {
+        const { cropId } = await upsertCropOnChain({
+          farmerAddr: wallet.address,
+          name: herb,
+          area: "N/A",
+          season: season || "",
+          soil: soilType || "",
+          lat: parsedLat as number,
+          lng: parsedLng as number,
+        });
+
+        startingCropId = cropId?.toString() || "";
+      } catch (chainErr: any) {
+        console.error(
+          "Failed to register starting crop on chain:",
+          chainErr.message
+        );
+      }
+    }
+
     const newFarmer = new Farmer({
       name,
       contact,
@@ -107,15 +147,17 @@ export const registerFarmer = async (
 
       crops: hasValidLocation
         ? [
-            {
+            new Crop({
+              cropId: startingCropId,
               cropName: herb,
+              soilType: soilType || "-",
+              season: season || "-",
+              quantity: Number(quantity),
               location: {
                 lat: parsedLat,
                 lng: parsedLng,
               },
-              season: "N/A",
-              soilType: "N/A",
-            },
+            }),
           ]
         : [],
     });
@@ -399,13 +441,9 @@ export const getFarmerActivity = async (
         order.companyId?.name ||
         "A buyer";
 
-     
-
       if (
         order.escrow?.fundedAt
       ) {
-        
-
         let paymentAmount =
           order.fees?.grandTotal;
 

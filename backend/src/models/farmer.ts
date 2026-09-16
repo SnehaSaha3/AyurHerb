@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose"
+import { isValidPhoneNumber } from "libphonenumber-js"
 import cropSchema, { ICrop } from "./crop"
 
 export interface IFarmer extends Document {
@@ -17,8 +18,16 @@ export interface IFarmer extends Document {
 }
 
 const farmerSchema = new Schema<IFarmer>({
-  name: { type: String, required: true },
-  contact: { type: String, required: true },
+  name: { type: String, required: true, trim: true },
+  contact: {
+  type: String,
+  required: true,
+  trim: true,
+  validate: {
+    validator: (v: string) => /^[6-9]\d{9}$/.test(v),
+    message: (props: { value: string }) => `${props.value} is not a valid Indian mobile number`,
+  },
+},
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true },
   address: { type: String, required: true },

@@ -16,6 +16,7 @@
     "framer-motion": "^12.38.0",
     "leaflet": "^1.9.4",
     "leaflet-defaulticon-compatibility": "^0.1.2",
+    "libphonenumber-js": "^1.13.13",
     "lucide-react": "^0.539.0",
     "pigeon-maps": "^0.22.1",
     "react": "^19.1.1",
