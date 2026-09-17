@@ -123,6 +123,7 @@ const shipmentSchema = new Schema<IShipment>(
       address: {
         type: String,
       },
+       scheduledAt: { type: Date }, 
     },
 
     vehicleLocation: {

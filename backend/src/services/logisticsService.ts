@@ -4,6 +4,27 @@ import Shipment from "../models/shipment";
 const AGENTS_URL =
   process.env.AGENTS_URL || "http://localhost:8001";
 
+/*
+ * Pickup scheduling heuristic — no real dispatcher exists yet, so
+ * this stands in for one. Baseline is next-day pickup; distance
+ * pushes it out further since a vehicle further from the farm
+ * needs more lead time to arrive. Swap for real dispatcher
+ * scheduling once that exists — callers only care about the
+ * returned Date, not how it was derived.
+ */
+function computePickupDate(distanceKm: number): Date {
+  const BASE_HOURS = 24;
+  const EXTRA_HOURS_PER_50KM = 6;
+
+  const extraHours =
+    Math.floor(Math.max(0, distanceKm - 50) / 50) *
+    EXTRA_HOURS_PER_50KM;
+
+  const pickup = new Date();
+  pickup.setHours(pickup.getHours() + BASE_HOURS + extraHours);
+  return pickup;
+}
+
 export async function createShipmentForOrder(
   order: any,
   farmer: any
@@ -70,14 +91,14 @@ export async function createShipmentForOrder(
     );
   }
 
-  if (
-    Number(vehicle.capacityKg) <
-    Number(order.quantity)
-  ) {
-    throw new Error(
-      "Selected vehicle cannot carry the order quantity"
-    );
-  }
+  if (Number(order.quantity) > Number(vehicle.capacityKg)) {
+  throw new Error(
+    "Selected vehicle cannot carry the order quantity"
+  );
+}
+  const scheduledPickupAt = computePickupDate(
+    Number(vehicle.distanceKm)
+  );
 
   const shipment = await Shipment.create({
     orderId: order._id,
@@ -99,6 +120,7 @@ export async function createShipmentForOrder(
       lat: farmerLat,
       lng: farmerLng,
       address: farmer.address,
+      scheduledAt: scheduledPickupAt,
     },
 
     vehicleLocation: {
@@ -141,6 +163,10 @@ export async function createShipmentForOrder(
 
   console.log(
     `📍 Distance: ${vehicle.distanceKm} km`
+  );
+
+  console.log(
+    `📅 Pickup scheduled: ${scheduledPickupAt.toISOString()}`
   );
 
   return shipment;
