@@ -17,7 +17,9 @@ interface Farmer {
 }
 
 interface Invoice {
+  invoiceNumber?: string;
   qrToken: string;
+  invoicePdfBase64?: string;
 }
 
 interface Escrow {
@@ -156,16 +158,34 @@ export default function CompanyOrders() {
   );
 
   const openInvoice = (order: Order) => {
-    if (!order.invoice?.qrToken) {
-      alert("Invoice has not been generated yet.");
-      return;
-    }
+  const base64 = order.invoice?.invoicePdfBase64;
 
-    window.open(
-      `http://localhost:8000/api/public/verify/${order._id}/${order.invoice.qrToken}/pdf`,
-      "_blank"
-    );
-  };
+  if (!base64) {
+    alert("Invoice has not been generated yet.");
+    return;
+  }
+
+  const byteCharacters = atob(base64);
+  const byteNumbers = new Array(byteCharacters.length);
+
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+
+  const byteArray = new Uint8Array(byteNumbers);
+
+  const blob = new Blob([byteArray], {
+    type: "application/pdf",
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  window.open(url, "_blank");
+
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 60000);
+};
 
   if (loading) {
     return (

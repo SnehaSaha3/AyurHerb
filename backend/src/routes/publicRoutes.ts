@@ -66,8 +66,8 @@ router.get(
           invoiceNumber: invoice.invoiceNumber,
           generatedAt: invoice.generatedAt,
 
-          // IMPORTANT:
-          // This is the exact PDF endpoint.
+          // This is the dynamic Crop Journey PDF endpoint.
+          // It is NOT the stored invoice PDF.
           pdfUrl:
             `/api/public/verify/${order._id}/${invoice.qrToken}/pdf`,
         },
@@ -106,7 +106,12 @@ router.get(
  *
  * /api/public/verify/:orderId/:qrToken/pdf
  *
- * THIS IS YOUR INVOICE PDF ROUTE.
+ * THIS IS THE DYNAMIC CROP JOURNEY PDF ROUTE.
+ *
+ * The QR inside the invoice and the physical QR
+ * attached to the shipment both point here.
+ *
+ * The generated PDF reflects the CURRENT order state.
  *
  * Example:
  * http://localhost:8000/api/public/verify/

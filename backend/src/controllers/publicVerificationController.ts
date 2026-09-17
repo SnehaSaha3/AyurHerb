@@ -6,6 +6,7 @@ import path from "path";
 import Order from "../models/order";
 import Company from "../models/company";
 import Farmer from "../models/farmer";
+import Shipment from "../models/shipment";
 
 /*
  * ============================================================
@@ -654,6 +655,7 @@ export async function verifyPublicOrder(
     const [
       company,
       farmer,
+      shipmentRecord,
     ] = await Promise.all([
       Company.findById(
         order.companyId
@@ -662,6 +664,10 @@ export async function verifyPublicOrder(
       Farmer.findById(
         order.farmerId
       ).lean(),
+
+      Shipment.findOne({
+        orderId: order._id,
+      }).lean(),
     ]);
 
     const shipmentTranche =
@@ -694,6 +700,7 @@ export async function verifyPublicOrder(
         farmer,
         shipmentTranche,
         deliveryTranche,
+        shipmentRecord,
       });
 
     return res
@@ -740,6 +747,7 @@ export async function verifyPublicOrder(
  *
  * - order confirmation
  * - escrow funding
+ * - pickup scheduling
  * - shipment release
  * - delivery release
  * - blockchain transaction references
@@ -801,13 +809,14 @@ export async function generatePublicProvenancePdf(
 
     /*
      * --------------------------------------------------------
-     * LOAD PUBLIC PARTICIPANTS
+     * LOAD PUBLIC PARTICIPANTS + SHIPMENT
      * --------------------------------------------------------
      */
 
     const [
       company,
       farmer,
+      shipmentRecord,
     ] = await Promise.all([
       Company.findById(
         order.companyId
@@ -816,6 +825,10 @@ export async function generatePublicProvenancePdf(
       Farmer.findById(
         order.farmerId
       ).lean(),
+
+      Shipment.findOne({
+        orderId: order._id,
+      }).lean(),
     ]);
 
     /*
@@ -1183,6 +1196,109 @@ export async function generatePublicProvenancePdf(
 
     /*
      * --------------------------------------------------------
+     * LOGISTICS & PICKUP
+     * --------------------------------------------------------
+     */
+
+    y =
+      drawSectionTitle(
+        doc,
+        "Logistics & pickup",
+        y
+      );
+
+    if (shipmentRecord) {
+      drawCard(
+        doc,
+        doc.page.margins.left,
+        y,
+        doc.page.width -
+          doc.page.margins.left -
+          doc.page.margins.right,
+        100
+      );
+
+      drawField(
+        doc,
+        "Scheduled pickup",
+        formatDate(
+          (shipmentRecord as any)
+            .pickup?.scheduledAt
+        ),
+        64,
+        y + 18,
+        200
+      );
+
+      drawField(
+        doc,
+        "Vehicle",
+        `${
+          (shipmentRecord as any)
+            .vehicle?.vehicleNumber ||
+          "N/A"
+        } (${
+          (shipmentRecord as any)
+            .vehicle?.vehicleType ||
+          "unspecified"
+        })`,
+        285,
+        y + 18,
+        240
+      );
+
+      drawField(
+        doc,
+        "Driver",
+        (shipmentRecord as any)
+          .vehicle?.driverName ||
+          "N/A",
+        64,
+        y + 61,
+        220
+      );
+
+      drawField(
+        doc,
+        "Distance to farm",
+        (shipmentRecord as any)
+          .distanceKm != null
+          ? `${
+              (shipmentRecord as any)
+                .distanceKm
+            } km`
+          : "N/A",
+        300,
+        y + 61,
+        225
+      );
+
+      y += 125;
+    } else {
+      drawCard(
+        doc,
+        doc.page.margins.left,
+        y,
+        doc.page.width -
+          doc.page.margins.left -
+          doc.page.margins.right,
+        50
+      );
+
+      drawField(
+        doc,
+        "Status",
+        "Shipment not yet assigned",
+        64,
+        y + 18,
+        400
+      );
+
+      y += 75;
+    }
+
+    /*
+     * --------------------------------------------------------
      * SUPPLY CHAIN JOURNEY
      * --------------------------------------------------------
      */
@@ -1232,12 +1348,30 @@ export async function generatePublicProvenancePdf(
       );
 
     /*
-     * Shipment milestone
+     * Pickup scheduled
      */
     y =
       drawTimelineItem(
         doc,
         3,
+        "Pickup scheduled",
+        (shipmentRecord as any)
+          ?.pickup?.scheduledAt,
+        shipmentRecord
+          ? "Scheduled"
+          : "Not yet assigned",
+        null,
+        y,
+        false
+      );
+
+    /*
+     * Shipment milestone
+     */
+    y =
+      drawTimelineItem(
+        doc,
+        4,
         "Shipment tranche released",
         shipmentTranche
           ?.releasedAt,
@@ -1256,7 +1390,7 @@ export async function generatePublicProvenancePdf(
     y =
       drawTimelineItem(
         doc,
-        4,
+        5,
         "Delivery tranche released",
         deliveryTranche
           ?.releasedAt,
@@ -1503,8 +1637,8 @@ export async function generatePublicProvenancePdf(
       .text(
         "The QR code associated with this transaction remains fixed. "
         + "This document is generated from the current AyurHerb order "
-        + "state, so verified shipment, delivery and blockchain events "
-        + "are reflected as the journey progresses.",
+        + "state, so verified pickup scheduling, shipment, delivery and "
+        + "blockchain events are reflected as the journey progresses.",
         doc.page.margins.left + 15,
         y + 32,
         {
@@ -1568,6 +1702,7 @@ function buildVerificationPage(data: {
   farmer: any;
   shipmentTranche: any;
   deliveryTranche: any;
+  shipmentRecord: any;
 }) {
   const {
     verified,
@@ -1576,6 +1711,7 @@ function buildVerificationPage(data: {
     farmer,
     shipmentTranche,
     deliveryTranche,
+    shipmentRecord,
   } = data;
 
   const statusLabel =
@@ -1624,6 +1760,18 @@ function buildVerificationPage(data: {
     Number(
       order.amount || 0
     );
+
+  const pickupScheduledAt =
+    shipmentRecord?.pickup
+      ?.scheduledAt || null;
+
+  const vehicleNumber =
+    shipmentRecord?.vehicle
+      ?.vehicleNumber || null;
+
+  const driverName =
+    shipmentRecord?.vehicle
+      ?.driverName || null;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -2334,6 +2482,68 @@ h1 {
             ${escapeHtml(
               farmerLocation
             )}
+          </span>
+
+        </div>
+
+      </section>
+
+      <section class="section">
+
+        <div class="section-title">
+          Logistics & pickup
+        </div>
+
+        <div class="row">
+
+          <span class="label">
+            Scheduled pickup
+          </span>
+
+          <span class="value">
+            ${
+              pickupScheduledAt
+                ? formatDate(
+                    pickupScheduledAt
+                  )
+                : "Not yet scheduled"
+            }
+          </span>
+
+        </div>
+
+        <div class="row">
+
+          <span class="label">
+            Vehicle
+          </span>
+
+          <span class="value">
+            ${
+              vehicleNumber
+                ? escapeHtml(
+                    vehicleNumber
+                  )
+                : "N/A"
+            }
+          </span>
+
+        </div>
+
+        <div class="row">
+
+          <span class="label">
+            Driver
+          </span>
+
+          <span class="value">
+            ${
+              driverName
+                ? escapeHtml(
+                    driverName
+                  )
+                : "N/A"
+            }
           </span>
 
         </div>

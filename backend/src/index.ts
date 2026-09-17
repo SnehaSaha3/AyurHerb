@@ -15,6 +15,7 @@ import orderRoutes from "./routes/orderRoutes"
 import shipmentRoutes from "./routes/shipmentRoutes";
 import publicVerifyRoutes from "./routes/publicRoutes"
 import publicVerificationRouter from "./routes/publicVerificationRouter"
+import marketRoutes from "./routes/marketRoutes";
 
 
 const app = express();
@@ -36,6 +37,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/shipments", shipmentRoutes);
 app.use("/api/public", publicVerifyRoutes)
 app.use("/api/public",publicVerificationRouter);
+app.use("/api/market", marketRoutes)
 
 mongoose.connect(process.env.MONGODB_URI as string)
   .then(() => console.log("✅ MongoDB connected"))
