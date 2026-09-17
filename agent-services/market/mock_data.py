@@ -38,9 +38,38 @@ MARKET_DATA = {
         "max": 60.0,
         "modal": 48.0,
     },
+     "tulsi": {
+        "cropName": "Tulsi",
+        "unit": "kg",
+        "state": "Assam",
+        "district": None,
+        "min": 60.0,
+        "max": 95.0,
+        "modal": 78.0,
+    },
+    "neem": {
+        "cropName": "Neem",
+        "unit": "kg",
+        "state": "Assam",
+        "district": None,
+        "min": 50.0,
+        "max": 80.0,
+        "modal": 65.0,
+    },
+    "ginger": {
+        "cropName": "Ginger",
+        "unit": "kg",
+        "state": "Assam",
+        "district": None,
+        "min": 55.0,
+        "max": 90.0,
+        "modal": 70.0,
+    },
 }
 
 
+def get_all_market_data():
+    return [get_market_data(name) for name in MARKET_DATA]
 def get_market_data(crop_name: str):
     key = crop_name.strip().lower()
 
