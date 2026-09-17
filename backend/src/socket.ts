@@ -19,6 +19,114 @@ interface SendMessagePayload {
 let ioInstance: SocketIOServer | null = null;
 const AGENTS_URL = process.env.AGENTS_URL || "http://localhost:8001";
 
+
+const REPORT_INTENT_REGEX =
+  /\breport\b.*\b(crop|health|field|farm)\b|\b(crop|health|field|farm)\b.*\breport\b/i;
+
+function detectsReportRequest(text: string): boolean {
+  const trimmed = text.trim().toLowerCase();
+  if (trimmed.startsWith("/report")) return false; 
+  return REPORT_INTENT_REGEX.test(trimmed);
+}
+async function generateAndSendReport(
+  farmerId: string,
+  companyId: string,
+  crop: any,
+  farmerName: string,
+  farmerAddress: string,
+  io: SocketIOServer
+) {
+  const reportRes = await axios.post(`${AGENTS_URL}/reports/generate-report`, {
+    farmerName,
+    cropName: crop.cropName,
+    soilType: crop.soilType || "Not specified",
+    season: crop.season || "Not specified",
+    quantity: crop.quantity,
+    location: farmerAddress,
+  });
+
+  const reportText = `🌿 Crop Health Report — ${crop.cropName}\n\n${reportRes.data.report}`;
+
+  const message = await Message.create({
+    senderId: farmerId,
+    senderType: "farmer",
+    receiverId: companyId,
+    receiverType: "company",
+    text: reportText,
+  });
+
+  io.to(`farmer:${farmerId}`).emit("receive_message", message);
+  io.to(`company:${companyId}`).emit("receive_message", message);
+  io.to(`company:${companyId}`).emit("unread:update", {
+    senderId: farmerId,
+    senderType: "farmer",
+  });
+
+  return message;
+}
+
+async function sendClarifyingCropQuestion(
+  farmerId: string,
+  companyId: string,
+  cropNames: string[],
+  io: SocketIOServer
+) {
+  const clarifyText = `Which crop would you like the report for? Available: ${cropNames.join(", ")}`;
+
+  const message = await Message.create({
+    senderId: farmerId,
+    senderType: "farmer",
+    receiverId: companyId,
+    receiverType: "company",
+    text: clarifyText,
+  });
+
+  io.to(`farmer:${farmerId}`).emit("receive_message", message);
+  io.to(`company:${companyId}`).emit("receive_message", message);
+  io.to(`company:${companyId}`).emit("unread:update", {
+    senderId: farmerId,
+    senderType: "farmer",
+  });
+}
+
+async function autoSendCropReport(
+  farmerId: string,
+  companyId: string,
+  requestText: string,
+  io: SocketIOServer
+) {
+  try {
+    const farmer = await Farmer.findById(farmerId);
+    if (!farmer) return;
+
+    const crops = farmer.crops || [];
+    if (crops.length === 0) return;
+
+    const lowerText = requestText.toLowerCase();
+
+    const crop =
+      crops.find((c: any) => lowerText.includes(c.cropName.toLowerCase())) ||
+      (crops.length === 1 ? crops[0] : undefined);
+
+    if (!crop) {
+      const names = crops.map((c: any) => c.cropName);
+      await sendClarifyingCropQuestion(farmerId, companyId, names, io);
+      return;
+    }
+
+    await generateAndSendReport(
+      farmerId,
+      companyId,
+      crop,
+      farmer.name,
+      farmer.address,
+      io
+    );
+  } catch (err) {
+    console.error("Auto crop report error:", err);
+  }
+}
+
 export function initSocket(httpServer: HTTPServer) {
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -59,6 +167,10 @@ export function initSocket(httpServer: HTTPServer) {
     const room = `${socket.userType}:${socket.userId}`;
     socket.join(room);
 
+    /*
+     * Explicit "/report" command — typed by the farmer, optionally
+     * naming a crop ("/report tulsi").
+     */
     async function handleReportCommand(
       receiverId: string,
       receiverType: "farmer" | "company",
@@ -78,7 +190,7 @@ export function initSocket(httpServer: HTTPServer) {
         }
 
         const cropQuery = text.slice("/report".length).trim().toLowerCase();
-        let crop =
+        const crop =
           cropQuery
             ? crops.find((c: any) => c.cropName.toLowerCase() === cropQuery) ||
               crops.find((c: any) => c.cropName.toLowerCase().includes(cropQuery))
@@ -94,28 +206,14 @@ export function initSocket(httpServer: HTTPServer) {
           });
         }
 
-        const reportRes = await axios.post(`${AGENTS_URL}/reports/generate-report`, {
-          farmerName: farmer.name,
-          cropName: crop.cropName,
-          soilType: crop.soilType || "Not specified",
-          season: crop.season || "Not specified",
-          quantity: crop.quantity,
-          location: farmer.address,
-        });
-
-        const reportText = `🌿 Crop Health Report — ${crop.cropName}\n\n${reportRes.data.report}`;
-
-        const message = await Message.create({
-          senderId: farmerId,
-          senderType: "farmer",
-          receiverId: companyId,
-          receiverType: "company",
-          text: reportText,
-        });
-
-        io.to(`farmer:${farmerId}`).emit("receive_message", message);
-        io.to(`company:${companyId}`).emit("receive_message", message);
-        io.to(`company:${companyId}`).emit("unread:update", { senderId: farmerId, senderType: "farmer" });
+        const message = await generateAndSendReport(
+          farmerId,
+          companyId,
+          crop,
+          farmer.name,
+          farmer.address,
+          io
+        );
 
         ack?.({ success: true, message });
       } catch (err) {
@@ -155,15 +253,25 @@ export function initSocket(httpServer: HTTPServer) {
           io.to(receiverRoom).emit("receive_message", message);
           io.to(room).emit("receive_message", message);
 
-          // WhatsApp-style badge bump — receiver's sidebar increments
-          // live without a refetch. Sender doesn't get this (they don't
-          // need an unread badge for their own message).
           io.to(receiverRoom).emit("unread:update", {
             senderId: socket.userId,
             senderType: socket.userType,
           });
 
           ack?.({ success: true, message });
+
+          /*
+           * Auto-trigger: a company sent a plain-English report
+           * request to a farmer. Generate and deliver it without
+           * the farmer having to type anything.
+           */
+          if (
+            socket.userType === "company" &&
+            receiverType === "farmer" &&
+            detectsReportRequest(trimmed)
+          ) {
+            await autoSendCropReport(receiverId, socket.userId!, trimmed, io);
+          }
         } catch (err) {
           console.error("send_message error:", err);
           ack?.({ success: false, error: "Failed to send message" });
