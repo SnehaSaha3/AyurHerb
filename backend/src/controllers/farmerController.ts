@@ -376,8 +376,8 @@ interface Activity {
 
   orderId?: string;
   invoice?: {
-    invoiceNumber: string;
-    pdfUrl: string;
+  invoiceNumber: string;
+  invoicePdfBase64?: string;
   };
 
   payment?: {
@@ -517,58 +517,42 @@ export const getFarmerActivity = async (
       ====================================================== */
 
       if (
+  order.invoice
+    ?.generatedAt &&
+  order.invoice
+    ?.invoiceNumber &&
+  order.invoice?.invoicePdfBase64
+) {
+  activities.push({
+    id:
+      `invoice-${orderId}`,
+
+    type: "invoice",
+
+    title:
+      "Invoice generated",
+
+    description:
+      `Invoice ${order.invoice.invoiceNumber} ` +
+      `is ready to view.`,
+
+    time:
+      order.invoice
+        .generatedAt,
+
+    orderId,
+
+    invoice: {
+      invoiceNumber:
         order.invoice
-          ?.generatedAt &&
+          .invoiceNumber,
+
+      invoicePdfBase64:
         order.invoice
-          ?.invoiceNumber &&
-        order.invoice?.qrToken
-      ) {
-        /*
-         * THIS IS THE EXISTING ROUTE.
-         *
-         * Do not change this to /farmers/...
-         *
-         * Existing route:
-         *
-         * GET
-         * /api/public/verify/:orderId/:qrToken/pdf
-         */
-
-        const invoicePdfUrl =
-          `/api/public/verify/` +
-          `${orderId}/` +
-          `${order.invoice.qrToken}/` +
-          `pdf`;
-
-        activities.push({
-          id:
-            `invoice-${orderId}`,
-
-          type: "invoice",
-
-          title:
-            "Invoice generated",
-
-          description:
-            `Invoice ${order.invoice.invoiceNumber} ` +
-            `is ready to view.`,
-
-          time:
-            order.invoice
-              .generatedAt,
-
-          orderId,
-
-          invoice: {
-            invoiceNumber:
-              order.invoice
-                .invoiceNumber,
-
-            pdfUrl:
-              invoicePdfUrl,
-          },
-        });
-      }
+          .invoicePdfBase64,
+    },
+  });
+}
 
       /* ======================================================
          3. SHIPMENT TRANCHE

@@ -27,9 +27,9 @@ interface Activity {
   orderId?: string;
 
   invoice?: {
-    invoiceNumber: string;
-    pdfUrl: string;
-  };
+  invoiceNumber: string;
+  invoicePdfBase64?: string;
+};
 
   payment?: {
     amount: number;
@@ -253,33 +253,126 @@ export default function FarmerBusinessActivity() {
     }
   };
 
-  const handleActivityClick = (
-    activity: Activity
-  ) => {
-    /*
-     * INVOICE
-     *
-     * Keep the existing public invoice route.
-     */
-    if (
-      activity.type === "invoice" &&
-      activity.invoice?.pdfUrl
-    ) {
-      const pdfUrl =
-        activity.invoice.pdfUrl.startsWith(
-          "http"
-        )
-          ? activity.invoice.pdfUrl
-          : `http://localhost:8000${activity.invoice.pdfUrl}`;
+ const handleActivityClick = (
+  activity: Activity
+) => {
+  /*
+   * INVOICE
+   *
+   * Open the stored invoice PDF.
+   *
+   * The QR inside this invoice points to
+   * the dynamic Crop Journey PDF.
+   */
+  if (
+    activity.type === "invoice" &&
+    activity.invoice?.invoicePdfBase64
+  ) {
+    try {
+      let base64 =
+        activity.invoice.invoicePdfBase64;
+
+      /*
+       * Remove a possible data-URL prefix.
+       * Example:
+       * data:application/pdf;base64,JVBERi0x...
+       */
+      if (base64.includes(",")) {
+        base64 =
+          base64.split(",")[1];
+      }
+
+      /*
+       * Remove whitespace/newlines that may
+       * have been introduced while storing
+       * or transferring the Base64 string.
+       */
+      base64 =
+        base64.replace(/\s/g, "");
+
+      /*
+       * Restore missing Base64 padding.
+       */
+      const remainder =
+        base64.length % 4;
+
+      if (remainder !== 0) {
+        base64 += "=".repeat(
+          4 - remainder
+        );
+      }
+
+      const byteCharacters =
+        atob(base64);
+
+      const byteNumbers =
+        new Array(
+          byteCharacters.length
+        );
+
+      for (
+        let i = 0;
+        i < byteCharacters.length;
+        i++
+      ) {
+        byteNumbers[i] =
+          byteCharacters.charCodeAt(i);
+      }
+
+      const byteArray =
+        new Uint8Array(byteNumbers);
+
+      const blob = new Blob(
+        [byteArray],
+        {
+          type: "application/pdf",
+        }
+      );
+
+      const url =
+        URL.createObjectURL(blob);
 
       window.open(
-        pdfUrl,
+        url,
         "_blank",
         "noopener,noreferrer"
       );
 
-      return;
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 60000);
+    } catch (err) {
+      console.error(
+        "Failed to open invoice PDF:",
+        err
+      );
+
+      alert(
+        "The invoice PDF could not be opened."
+      );
     }
+
+    return;
+  }
+
+  /*
+   * Payment and shipment currently don't
+   * navigate anywhere because we haven't
+   * defined the farmer order-detail route.
+   *
+   * Keep the orderId internally available.
+   */
+  if (
+    (activity.type === "payment" ||
+      activity.type === "shipment") &&
+    activity.orderId
+  ) {
+    console.log(
+      "Selected order:",
+      activity.orderId
+    );
+  }
+
 
     /*
      * Payment and shipment currently don't
