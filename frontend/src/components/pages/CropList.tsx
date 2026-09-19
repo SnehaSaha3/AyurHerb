@@ -68,7 +68,7 @@ export default function CropList() {
       }
 
       const res = await axios.get(
-        "http://localhost:8000/api/crops/mine",
+        "https://ayurherb-backend-7yw4.onrender.com/api/crops/mine",
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -134,7 +134,7 @@ export default function CropList() {
       }
 
       await axios.post(
-        "http://localhost:8000/api/crops/add",
+        "https://ayurherb-backend-7yw4.onrender.com/api/crops/add",
         {
           cropName: newCropName,
           soilType: newSoilType,
@@ -229,7 +229,7 @@ export default function CropList() {
       }
 
       await axios.patch(
-        `http://localhost:8000/api/crops/${editingCrop.cropId}`,
+        `https://ayurherb-backend-7yw4.onrender.com/api/crops/${editingCrop.cropId}`,
         {
           cropName: editCropName,
           soilType: editSoilType,

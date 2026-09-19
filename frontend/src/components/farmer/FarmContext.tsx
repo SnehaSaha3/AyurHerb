@@ -51,7 +51,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           localStorage.getItem("farmerToken") || localStorage.getItem("token");
         if (!token) return;
 
-        const response = await fetch("http://localhost:8000/api/farmers/me", {
+        const response = await fetch("https://ayurherb-backend-7yw4.onrender.com/api/farmers/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok) return;
@@ -77,7 +77,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const response = await axios.get("http://localhost:8000/api/crops/mine", {
+        const response = await axios.get("https://ayurherb-backend-7yw4.onrender.com/api/crops/mine", {
           headers: { Authorization: `Bearer ${token}` },
         });
 

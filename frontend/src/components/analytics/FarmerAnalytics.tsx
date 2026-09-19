@@ -148,7 +148,7 @@ export default function FarmerAnalytics() {
         }
 
         const response = await axios.get(
-          "http://localhost:8000/api/farmers/analytics",
+          "https://ayurherb-backend-7yw4.onrender.com/api/farmers/analytics",
           {
             params: { range },
             headers: { Authorization: `Bearer ${token}` },

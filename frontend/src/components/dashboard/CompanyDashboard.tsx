@@ -43,7 +43,7 @@ export default function CompanyDashboard() {
         if (!token) return;
 
         const response = await axios.get(
-          "http://localhost:8000/api/companies/me",
+          "https://ayurherb-backend-7yw4.onrender.com/api/companies/me",
           {
             headers: {
               Authorization: `Bearer ${token}`,

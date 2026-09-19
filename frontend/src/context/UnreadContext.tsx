@@ -118,7 +118,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     const fetchUnreadCounts = async () => {
       try {
         const res = await axios.get(
-          "http://localhost:8000/api/messages/unread-counts",
+          "https://ayurherb-backend-7yw4.onrender.com/api/messages/unread-counts",
           {
             headers: {
               Authorization: `Bearer ${token}`,

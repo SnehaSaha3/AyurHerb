@@ -43,7 +43,7 @@ export interface AyurMateResponse {
 
 const AYURMATE_API =
   import.meta.env.VITE_AYURMATE_API_URL ||
-  "http://localhost:8002";
+  "https://ayurherb-chatbot.onrender.com";
 
 export async function askChatbot(
   question: string,

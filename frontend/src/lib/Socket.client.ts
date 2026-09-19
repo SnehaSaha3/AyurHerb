@@ -36,7 +36,7 @@ export function getSocket(token: string): Socket {
 
   socket = io(
   import.meta.env.VITE_API_BASE_URL ||
-    "http://localhost:8000",
+    "https://ayurherb-backend-7yw4.onrender.com",
   {
     auth: {
       token,

@@ -72,7 +72,7 @@ export default function CompanyOrders() {
       if (!token) return;
 
       const res = await axios.get(
-        "http://localhost:8000/api/orders/company",
+        "https://ayurherb-backend-7yw4.onrender.com/api/orders/company",
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -586,7 +586,7 @@ function PaymentButton({
         localStorage.getItem("companyToken");
 
       const createRes = await axios.post(
-        `http://localhost:8000/api/orders/${order._id}/create-payment`,
+        `https://ayurherb-backend-7yw4.onrender.com/api/orders/${order._id}/create-payment`,
         {},
         {
           headers: {
@@ -622,7 +622,7 @@ function PaymentButton({
             try {
               const verifyRes =
                 await axios.post(
-                  `http://localhost:8000/api/orders/${order._id}/verify-payment`,
+                  `https://ayurherb-backend-7yw4.onrender.com/api/orders/${order._id}/verify-payment`,
                   {
                     razorpayPaymentId:
                       response.razorpay_payment_id,

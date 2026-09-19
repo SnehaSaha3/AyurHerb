@@ -114,7 +114,7 @@ function FarmerShipments() {
       }
 
       const response = await axios.get(
-        "http://localhost:8000/api/shipments/farmer",
+        "https://ayurherb-backend-7yw4.onrender.com/api/shipments/farmer",
         {
           headers: {
             Authorization: `Bearer ${token}`,

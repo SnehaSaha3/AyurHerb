@@ -106,7 +106,7 @@ export default function CompanyHome() {
 
     try {
       const res = await axios.get(
-        "http://localhost:8000/api/orders/company",
+        "https://ayurherb-backend-7yw4.onrender.com/api/orders/company",
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -225,7 +225,7 @@ export default function CompanyHome() {
       setMessage("");
 
       const createRes = await axios.post(
-        `http://localhost:8000/api/orders/${order._id}/create-payment`,
+        `https://ayurherb-backend-7yw4.onrender.com/api/orders/${order._id}/create-payment`,
         {},
         {
           headers: {
@@ -259,7 +259,7 @@ export default function CompanyHome() {
         handler: async function (response: any) {
           try {
             const verifyRes = await axios.post(
-              `http://localhost:8000/api/orders/${order._id}/verify-payment`,
+              `https://ayurherb-backend-7yw4.onrender.com/api/orders/${order._id}/verify-payment`,
               {
                 razorpayPaymentId:
                   response.razorpay_payment_id,

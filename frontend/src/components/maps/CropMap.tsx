@@ -307,7 +307,7 @@ export default function CropMap() {
   useEffect(() => {
     const fetchCrops = async () => {
       try {
-        const res = await axios.get("http://localhost:8000/api/crops")
+        const res = await axios.get("https://ayurherb-backend-7yw4.onrender.com/api/crops")
 
         if (!Array.isArray(res.data.crops)) {
           setCrops([])

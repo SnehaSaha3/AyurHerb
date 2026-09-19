@@ -248,7 +248,7 @@ export default function CompanyMessages() {
     const fetchFarmers = async () => {
       try {
         const res = await axios.get(
-          "http://localhost:8000/api/farmers"
+          "https://ayurherb-backend-7yw4.onrender.com/api/farmers"
         );
 
         if (
@@ -352,7 +352,7 @@ export default function CompanyMessages() {
 
       try {
         const res = await axios.get(
-          `http://localhost:8000/api/messages/chat/${companyId}/${selectedFarmer.farmerId}`,
+          `https://ayurherb-backend-7yw4.onrender.com/api/messages/chat/${companyId}/${selectedFarmer.farmerId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -459,7 +459,7 @@ export default function CompanyMessages() {
     const timer = setTimeout(() => {
       axios
         .post(
-          "http://localhost:8000/api/orders/market-preview",
+          "https://ayurherb-backend-7yw4.onrender.com/api/orders/market-preview",
           {
             cropName: crop.cropName,
             companyOfferPrice: offer,
@@ -648,7 +648,7 @@ export default function CompanyMessages() {
 
     try {
       const res = await axios.post(
-        "http://localhost:8000/api/orders/create",
+        "https://ayurherb-backend-7yw4.onrender.com/api/orders/create",
         {
           farmerId:
             selectedFarmer.farmerId,

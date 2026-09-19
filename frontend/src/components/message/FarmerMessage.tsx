@@ -116,7 +116,7 @@ export default function FarmerMessages() {
   const fetchInbox = async (token: string) => {
     try {
       const res = await axios.get(
-        "http://localhost:8000/api/messages/inbox",
+        "https://ayurherb-backend-7yw4.onrender.com/api/messages/inbox",
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -225,7 +225,7 @@ export default function FarmerMessages() {
     const fetchCompanies = async () => {
       try {
         const res = await axios.get(
-          "http://localhost:8000/api/companies"
+          "https://ayurherb-backend-7yw4.onrender.com/api/companies"
         );
 
         if (
@@ -353,7 +353,7 @@ export default function FarmerMessages() {
 
       try {
         const res = await axios.get(
-          `http://localhost:8000/api/messages/chat/${selectedCompany.companyId}/${farmerId}`,
+          `https://ayurherb-backend-7yw4.onrender.com/api/messages/chat/${selectedCompany.companyId}/${farmerId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

@@ -125,7 +125,7 @@ export default function FarmerBusinessActivity() {
         }
 
         const response = await axios.get(
-          "http://localhost:8000/api/farmers/activity",
+          "https://ayurherb-backend-7yw4.onrender.com/api/farmers/activity",
           {
             headers: {
               Authorization: `Bearer ${token}`,

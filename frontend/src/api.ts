@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const API = axios.create({
-  baseURL: "http://localhost:8000/api/crops", // ✅ fixed
+  baseURL: "https://ayurherb-backend-7yw4.onrender.com/api/crops", // ✅ fixed
 })
 
 export interface CropData {

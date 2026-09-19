@@ -149,7 +149,7 @@ export default function CompanyAnalytics() {
         }
 
         const response = await axios.get(
-          "http://localhost:8000/api/companies/analytics",
+          "https://ayurherb-backend-7yw4.onrender.com/api/companies/analytics",
           {
             params: { range },
             headers: { Authorization: `Bearer ${token}` },

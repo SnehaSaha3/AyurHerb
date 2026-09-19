@@ -145,7 +145,7 @@ function Profile() {
           return
         }
 
-        const res = await axios.get("http://localhost:8000/api/farmers/me", {
+        const res = await axios.get("https://ayurherb-backend-7yw4.onrender.com/api/farmers/me", {
           headers: {
             Authorization: `Bearer ${token}`,
           },

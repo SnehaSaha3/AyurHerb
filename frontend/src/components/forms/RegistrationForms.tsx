@@ -95,8 +95,8 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
     try {
       const url =
         role === "farmer"
-          ? "http://localhost:8000/api/farmers/register"
-          : "http://localhost:8000/api/companies/register";
+          ? "https://ayurherb-backend-7yw4.onrender.com/api/farmers/register"
+          : "https://ayurherb-backend-7yw4.onrender.com/api/companies/register";
 
       const payload =
         role === "farmer"

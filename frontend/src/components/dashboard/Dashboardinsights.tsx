@@ -113,7 +113,7 @@ export default function DashboardInsight() {
     setTopCropsError(false);
 
     axios
-      .get("http://localhost:8000/api/market/top-crops")
+      .get("https://ayurherb-backend-7yw4.onrender.com/api/market/top-crops")
       .then((res) => {
         if (cancelled) return;
 
@@ -177,7 +177,7 @@ export default function DashboardInsight() {
       uniqueCropNames.map((cropName) =>
         axios
           .get(
-            `http://localhost:8000/api/market/history/${encodeURIComponent(cropName)}`,
+            `https://ayurherb-backend-7yw4.onrender.com/api/market/history/${encodeURIComponent(cropName)}`,
             { params: { days: 30 } },
           )
           .then((res) => {
