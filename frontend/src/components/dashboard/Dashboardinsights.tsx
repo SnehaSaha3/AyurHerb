@@ -234,8 +234,8 @@ export default function DashboardInsight() {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-[#e5ece3] bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-end justify-between">
-          <div>
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="text-sm font-semibold text-[#193522]">
               Crop &amp; market insight
             </h2>
@@ -247,7 +247,7 @@ export default function DashboardInsight() {
           <button
             type="button"
             onClick={() => navigate("/farmer-dashboard/crops")}
-            className="hidden items-center gap-1 text-xs font-medium text-[#28733d] hover:underline sm:flex"
+            className="hidden shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-[#28733d] hover:underline sm:flex"
           >
             View all
             <ArrowUpRight size={13} />
