@@ -3,15 +3,11 @@ from datetime import datetime, timedelta, timezone
 
 from market.mock_data import get_market_data
 
+MIN_DAYS = 1
+MAX_DAYS = 365
+
 
 def _seeded_fraction(key: str) -> float:
-    """
-    Deterministic pseudo-random value in [0, 1] derived from a string key.
-    Same crop + same date always produces the same fraction, so the
-    trend line is stable across reloads instead of jittering on every
-    fetch. Swap this whole module for a real mandi price feed once
-    that pipeline exists — the endpoint shape stays the same.
-    """
     digest = hashlib.sha256(key.encode()).hexdigest()
     return int(digest[:8], 16) / 0xFFFFFFFF
 
@@ -21,23 +17,24 @@ def generate_price_history(crop_name: str, days: int = 30):
     if not base:
         return None
 
+    days = max(MIN_DAYS, min(int(days), MAX_DAYS))
+
     modal = base["modal"]
     min_price = base["min"]
     max_price = base["max"]
     spread = max_price - min_price
+
+    canonical_name = base["cropName"].lower()
 
     today = datetime.now(timezone.utc).date()
     history = []
 
     for i in range(days - 1, -1, -1):
         day = today - timedelta(days=i)
-        seed_key = f"{crop_name.lower()}:{day.isoformat()}"
-        fraction = _seeded_fraction(seed_key)
+        fraction = _seeded_fraction(f"{canonical_name}:{day.isoformat()}")
         price = round(min_price + fraction * spread, 2)
         history.append({"date": day.isoformat(), "price": price})
 
-    # Anchor "today" to the live modal price so this stays consistent
-    # with the market-reference endpoint.
     history[-1]["price"] = modal
 
     change_from_yesterday = (
@@ -52,4 +49,6 @@ def generate_price_history(crop_name: str, days: int = 30):
         "history": history,
         "todayPrice": modal,
         "changeFromYesterday": change_from_yesterday,
+        "estimated": base["estimated"],
+        "source": base["source"],
     }

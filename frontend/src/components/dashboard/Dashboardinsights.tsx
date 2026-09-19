@@ -25,6 +25,10 @@ import axios from "axios";
 
 import { useFarm } from "../farmer/FarmContext";
 
+const API_BASE = "https://ayurherb-backend-7yw4.onrender.com";
+
+const RATE_REQUEST_TIMEOUT_MS = 100000;
+
 type SoilRule = { min: number; max: number; ideal: number };
 
 const SOIL_RULES: Record<string, SoilRule> = {
@@ -61,8 +65,15 @@ interface CropRate {
   cropName: string;
   unit: string;
   history: PricePoint[];
-  todayPrice: number;
+  todayPrice: number | null;
   changeFromYesterday: number;
+  estimated?: boolean;
+  unavailable?: boolean;
+}
+
+interface FarmCrop {
+  key: string;
+  name: string;
 }
 
 export default function DashboardInsight() {
@@ -73,16 +84,14 @@ export default function DashboardInsight() {
   const [topCropsLoading, setTopCropsLoading] = useState(false);
   const [topCropsError, setTopCropsError] = useState(false);
 
-  const [cropRates, setCropRates] = useState<CropRate[]>([]);
-  const [cropRatesLoading, setCropRatesLoading] = useState(false);
-  const [cropRatesError, setCropRatesError] = useState(false);
+  const [rateByKey, setRateByKey] = useState<Record<string, CropRate>>({});
 
   const moistureData = useMemo(
     () =>
       crops.map((crop) => {
         const rule = getSoilRule(crop.cropName);
         return {
-          cropName: crop.cropName,
+          cropName: crop.cropName.trim(),
           moisture: rule.ideal,
           min: rule.min,
           max: rule.max,
@@ -103,17 +112,15 @@ export default function DashboardInsight() {
     );
   }, [moistureData]);
 
-  /*
-   * High-demand crops board — ranked across ALL crops the agent
-   * tracks, not filtered to what this farmer currently grows.
-   */
   useEffect(() => {
     let cancelled = false;
     setTopCropsLoading(true);
     setTopCropsError(false);
 
     axios
-      .get("https://ayurherb-backend-7yw4.onrender.com/api/market/top-crops")
+      .get(`${API_BASE}/api/market/top-crops`, {
+        timeout: RATE_REQUEST_TIMEOUT_MS,
+      })
       .then((res) => {
         if (cancelled) return;
 
@@ -155,66 +162,77 @@ export default function DashboardInsight() {
     return topCrops[0];
   }, [topCrops]);
 
-  /*
-   * Today's rates — one gold-rate-style sparkline per crop this
-   * farmer actually grows, pulled from /api/market/history/:cropName.
-   */
+  const farmCrops = useMemo<FarmCrop[]>(() => {
+    const seen = new Map<string, string>();
+
+    crops.forEach((crop) => {
+      const name = crop.cropName.trim();
+      const key = normalizeCropName(name);
+      if (name && !seen.has(key)) {
+        seen.set(key, name);
+      }
+    });
+
+    return Array.from(seen, ([key, name]) => ({ key, name }));
+  }, [crops]);
+
+  const farmCropSignature = farmCrops.map((c) => c.key).join("|");
+
   useEffect(() => {
-    if (crops.length === 0) {
-      setCropRates([]);
-      return;
-    }
+    setRateByKey({});
+
+    if (farmCrops.length === 0) return;
 
     let cancelled = false;
-    setCropRatesLoading(true);
-    setCropRatesError(false);
 
-    const uniqueCropNames = Array.from(
-      new Set(crops.map((c) => c.cropName)),
-    );
+    farmCrops.forEach(({ key, name }) => {
+      axios
+        .get(`${API_BASE}/api/market/history/${encodeURIComponent(name)}`, {
+          params: { days: 30 },
+          timeout: RATE_REQUEST_TIMEOUT_MS,
+        })
+        .then((res): CropRate => {
+          const data = res.data?.data;
+          const unavailable =
+            res.data?.unavailable === true ||
+            !data ||
+            data.todayPrice === null ||
+            data.todayPrice === undefined;
 
-    Promise.all(
-      uniqueCropNames.map((cropName) =>
-        axios
-          .get(
-            `https://ayurherb-backend-7yw4.onrender.com/api/market/history/${encodeURIComponent(cropName)}`,
-            { params: { days: 30 } },
-          )
-          .then((res) => {
-            const data = res.data?.data;
-            if (!data) return null;
-            return {
-              cropName: data.cropName,
-              unit: data.unit,
-              history: data.history,
-              todayPrice: data.todayPrice,
-              changeFromYesterday: data.changeFromYesterday,
-            } as CropRate;
-          })
-          .catch(() => null),
-      ),
-    ).then((results) => {
-      if (cancelled) return;
-
-      const resolved = results.filter(
-        (r): r is CropRate => r !== null,
-      );
-
-      setCropRates(resolved);
-      setCropRatesError(uniqueCropNames.length > 0 && resolved.length === 0);
-      setCropRatesLoading(false);
+          return {
+            cropName: name,
+            unit: data?.unit ?? "kg",
+            history: Array.isArray(data?.history) ? data.history : [],
+            todayPrice: data?.todayPrice ?? null,
+            changeFromYesterday: data?.changeFromYesterday ?? 0,
+            estimated: data?.estimated === true,
+            unavailable,
+          };
+        })
+        .catch(
+          (): CropRate => ({
+            cropName: name,
+            unit: "kg",
+            history: [],
+            todayPrice: null,
+            changeFromYesterday: 0,
+            unavailable: true,
+          }),
+        )
+        .then((rate) => {
+          if (!cancelled) {
+            setRateByKey((prev) => ({ ...prev, [key]: rate }));
+          }
+        });
     });
 
     return () => {
       cancelled = true;
     };
-  }, [crops]);
+  }, [farmCropSignature]);
 
   return (
     <div className="space-y-6">
-      {/* =====================================================
-          CARD 1 — HIGH-DEMAND CROPS + CROP OVERVIEW
-         ===================================================== */}
       <div className="rounded-2xl border border-[#e5ece3] bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-end justify-between">
           <div>
@@ -236,7 +254,6 @@ export default function DashboardInsight() {
           </button>
         </div>
 
-        {/* HIGH-DEMAND CROPS */}
         <div className="pb-8">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -375,7 +392,6 @@ export default function DashboardInsight() {
 
         <div className="border-t border-[#edf1eb]" />
 
-        {/* CROP OVERVIEW */}
         <div className="pt-8">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -460,9 +476,9 @@ export default function DashboardInsight() {
                     />
 
                     <Bar dataKey="moisture" radius={[8, 8, 0, 0]} maxBarSize={40}>
-                      {moistureData.map((entry) => (
+                      {moistureData.map((entry, index) => (
                         <Cell
-                          key={entry.cropName}
+                          key={`${entry.cropName}-${index}`}
                           fill={entry.inRange ? "url(#moistureFill)" : "#e0a23a"}
                         />
                       ))}
@@ -486,9 +502,6 @@ export default function DashboardInsight() {
         </div>
       </div>
 
-      {/* =====================================================
-          CARD 2 — TODAY'S CROP RATES (separate card, below)
-         ===================================================== */}
       <div className="rounded-2xl border border-[#e5ece3] bg-white p-5 shadow-sm">
         <div className="mb-4">
           <h2 className="text-sm font-semibold text-[#193522]">
@@ -499,13 +512,7 @@ export default function DashboardInsight() {
           </p>
         </div>
 
-        {cropRatesLoading && (
-          <div className="flex h-[100px] items-center justify-center text-center">
-            <p className="text-xs text-[#8a9889]">Loading today's rates...</p>
-          </div>
-        )}
-
-        {!cropRatesLoading && crops.length === 0 && (
+        {farmCrops.length === 0 && (
           <div className="flex h-[100px] items-center justify-center text-center">
             <p className="text-xs text-[#667467]">
               Add a crop to see its daily rate
@@ -513,29 +520,57 @@ export default function DashboardInsight() {
           </div>
         )}
 
-        {!cropRatesLoading && crops.length > 0 && cropRates.length === 0 && (
-          <div className="flex h-[100px] items-center justify-center text-center">
-            <p className="text-xs text-[#667467]">
-              {cropRatesError
-                ? "Rate data is unavailable right now"
-                : "No rate data yet"}
-            </p>
-          </div>
-        )}
-
-        {!cropRatesLoading && cropRates.length > 0 && (
+        {farmCrops.length > 0 && (
           <div className="flex gap-3 overflow-x-auto pb-1">
-            {cropRates.map((rate) => {
+            {farmCrops.map(({ key, name }) => {
+              const rate = rateByKey[key];
+
+              if (!rate) {
+                return (
+                  <div
+                    key={key}
+                    className="w-[190px] shrink-0 rounded-xl border border-[#edf1eb] bg-[#fcfdfb] p-3"
+                  >
+                    <p className="truncate text-xs font-semibold text-[#26382b]">
+                      {name}
+                    </p>
+                    <p className="mt-3 text-[11px] text-[#8a9889]">
+                      Loading today's rate...
+                    </p>
+                    <div className="mt-3 h-10 w-full animate-pulse rounded-md bg-[#f1f5ef]" />
+                  </div>
+                );
+              }
+
+              if (rate.unavailable || rate.todayPrice === null) {
+                return (
+                  <div
+                    key={key}
+                    className="w-[190px] shrink-0 rounded-xl border border-[#edf1eb] bg-[#fcfdfb] p-3"
+                  >
+                    <p className="truncate text-xs font-semibold text-[#26382b]">
+                      {name}
+                    </p>
+                    <p className="mt-3 text-[11px] text-[#667467]">
+                      Rate unavailable right now
+                    </p>
+                    <p className="mt-6 text-[9px] text-[#a1aaa0]">
+                      Try again in a moment
+                    </p>
+                  </div>
+                );
+              }
+
               const isUp = rate.changeFromYesterday >= 0;
 
               return (
                 <div
-                  key={rate.cropName}
+                  key={key}
                   className="w-[190px] shrink-0 rounded-xl border border-[#edf1eb] bg-[#fcfdfb] p-3"
                 >
                   <div className="flex items-center justify-between">
                     <p className="truncate text-xs font-semibold text-[#26382b]">
-                      {rate.cropName}
+                      {name}
                     </p>
 
                     <span
@@ -545,12 +580,8 @@ export default function DashboardInsight() {
                           : "bg-[#fdeeed] text-[#c1554a]"
                       }`}
                     >
-                      {isUp ? (
-                        <ArrowUp size={9} />
-                      ) : (
-                        <ArrowDown size={9} />
-                      )}
-                      ₹{Math.abs(rate.changeFromYesterday)}
+                      {isUp ? <ArrowUp size={9} /> : <ArrowDown size={9} />}₹
+                      {Math.abs(rate.changeFromYesterday)}
                     </span>
                   </div>
 
@@ -559,6 +590,11 @@ export default function DashboardInsight() {
                     <span className="ml-1 text-[10px] font-normal text-[#8a9889]">
                       /{rate.unit}
                     </span>
+                    {rate.estimated && (
+                      <span className="ml-1.5 rounded-full bg-[#fdf3e1] px-1.5 py-0.5 text-[9px] font-medium text-[#b07a1c]">
+                        Est.
+                      </span>
+                    )}
                   </p>
 
                   <div className="mt-1 h-10 w-full">
@@ -576,9 +612,7 @@ export default function DashboardInsight() {
                     </ResponsiveContainer>
                   </div>
 
-                  <p className="mt-1 text-[9px] text-[#a1aaa0]">
-                    Last 30 days
-                  </p>
+                  <p className="mt-1 text-[9px] text-[#a1aaa0]">Last 30 days</p>
                 </div>
               );
             })}
