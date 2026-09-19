@@ -4,10 +4,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-/* ============================================================
-   PROVIDER + RELAYER WALLET
-   ============================================================ */
-
 const provider = new ethers.JsonRpcProvider(
   process.env.RPC_URL || "http://127.0.0.1:8545"
 );
@@ -51,36 +47,18 @@ const orderLog = new ethers.Contract(
     dataHash: string,
     overrides?: { nonce?: number }
   ): Promise<ethers.ContractTransactionResponse>;
+
+  getConfirmedOrder(orderId: string): Promise<{ timestamp: bigint }>;
+
+  getEscrow(orderId: string): Promise<{ funded: boolean }>;
 };
 
-/* ============================================================
-   RELAYER WALLET SAFETY CHECK
-
-   The account this wallet uses must be dedicated to relaying
-   OrderLog transactions and never reused as the deployer account
-   or for anything else. Any other transaction from this same
-   account (a contract deployment, a manual script, another
-   process) advances its nonce outside of this module's tracking
-   and will desync it. Hardhat's default first account is commonly
-   reused as both deployer and test signer — make sure PRIVATE_KEY
-   here is a different account from whichever one deploys OrderLog.sol.
-   ============================================================ */
-
-/* ============================================================
-   LOCAL NONCE TRACKING
-
-   Querying the chain for "the next nonce" before every transaction
-   is what caused repeated NONCE_EXPIRED errors: ethers caches
-   getTransactionCount results for a short window, so back-to-back
-   calls can read a stale value, and any other transaction from this
-   wallet (a deploy script, a previous process instance) can advance
-   the real nonce without this process knowing.
-
-   Instead, the next nonce is fetched from the chain exactly once,
-   then tracked locally and incremented after every send. The chain
-   is only re-queried if a send comes back with a nonce error,
-   which means the local count has drifted from reality.
-   ============================================================ */
+/*
+ * The PRIVATE_KEY account must be dedicated to relaying OrderLog
+ * transactions. Any other transaction from the same account
+ * (deployment, manual script, second process) advances its nonce
+ * outside this module's tracking.
+ */
 
 let nextNoncePromise: Promise<number> | null = null;
 
@@ -102,25 +80,28 @@ function resyncNonce(): void {
   nextNoncePromise = null;
 }
 
-/* ============================================================
-   WALLET TRANSACTION QUEUE
-
-   All writes from this custodial wallet are serialized: only one
-   transaction is ever being built/sent/confirmed at a time. This
-   is still required even with local nonce tracking, since sending
-   nonce N+1 before nonce N has been accepted is rejected outright
-   by Hardhat's automine ("transactions can't be queued when
-   automining") rather than queued for later.
-   ============================================================ */
-
 let walletQueue: Promise<unknown> = Promise.resolve();
 
-const MAX_NONCE_RETRIES = 3;
-const NONCE_RETRY_DELAY_MS = 400;
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 1500;
+
+function errorText(error: any): string {
+  return [error?.reason, error?.shortMessage, error?.message]
+    .filter(Boolean)
+    .join(" ");
+}
 
 function isNonceError(error: any): boolean {
-  const message = error?.shortMessage || error?.message || "";
-  return error?.code === "NONCE_EXPIRED" || /nonce too low|nonce too high/i.test(message);
+  return (
+    error?.code === "NONCE_EXPIRED" ||
+    /nonce too low|nonce too high|replacement transaction underpriced/i.test(
+      errorText(error)
+    )
+  );
+}
+
+function isStaleStateError(error: any): boolean {
+  return /Order not confirmed|Escrow not funded/i.test(errorText(error));
 }
 
 function delay(ms: number): Promise<void> {
@@ -137,14 +118,16 @@ function enqueueWalletTx<T>(task: (nonce: number) => Promise<T>): Promise<T> {
       try {
         return await task(nonce);
       } catch (error: any) {
+        resyncNonce();
         attempt += 1;
 
-        if (!isNonceError(error) || attempt >= MAX_NONCE_RETRIES) {
+        const retryable = isNonceError(error) || isStaleStateError(error);
+
+        if (!retryable || attempt >= MAX_RETRIES) {
           throw error;
         }
 
-        resyncNonce();
-        await delay(NONCE_RETRY_DELAY_MS * attempt);
+        await delay(RETRY_DELAY_MS * attempt);
       }
     }
   };
@@ -154,9 +137,40 @@ function enqueueWalletTx<T>(task: (nonce: number) => Promise<T>): Promise<T> {
   return result;
 }
 
-/* ============================================================
-   VALIDATION HELPERS
-   ============================================================ */
+async function waitUntil(
+  check: () => Promise<boolean>,
+  description: string,
+  timeoutMs = 30000,
+  intervalMs = 1000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (true) {
+    try {
+      if (await check()) {
+        return;
+      }
+    } catch {
+      // transient RPC read failure, retry until deadline
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out waiting for ${description} on-chain`);
+    }
+
+    await delay(intervalMs);
+  }
+}
+
+async function isOrderConfirmed(orderId: string): Promise<boolean> {
+  const order = await orderLog.getConfirmedOrder(orderId);
+  return Number(order.timestamp) > 0;
+}
+
+async function isEscrowFunded(orderId: string): Promise<boolean> {
+  const escrow = await orderLog.getEscrow(orderId);
+  return escrow.funded === true;
+}
 
 function validateOrderLogAddress(): void {
   if (!process.env.ORDER_LOG_ADDRESS?.startsWith("0x")) {
@@ -194,22 +208,6 @@ function validateString(value: string, fieldName: string): void {
   }
 }
 
-/* ============================================================
-   CONFIRMED ORDER
-
-   Correct lifecycle:
-   create order -> agent verification -> stock verification ->
-   awaiting_payment -> company pays -> payment verified ->
-   escrow funded -> fraud/admin approval -> logConfirmedOrderOnChain()
-
-   Must run before logEscrowFundedOnChain — the contract requires
-   the order to already be confirmed before escrow can be funded.
-
-   unitPrice is the agreed price per kg, scaled to paise (same
-   scale convention as amountPaidPaise) since Solidity has no
-   decimals: ₹975.00/kg is sent on-chain as 97500.
-   ============================================================ */
-
 export async function logConfirmedOrderOnChain(payload: {
   orderId: string;
   companyAddr: string;
@@ -218,7 +216,7 @@ export async function logConfirmedOrderOnChain(payload: {
   quantity: number;
   unitPricePaise: number;
   amount: number;
-}): Promise<{ txHash: string }> {
+}): Promise<{ txHash: string | null }> {
   const { orderId, companyAddr, farmerAddr, cropName, quantity, unitPricePaise, amount } = payload;
 
   validateOrderLogAddress();
@@ -230,11 +228,15 @@ export async function logConfirmedOrderOnChain(payload: {
   validatePositiveNumber(unitPricePaise, "unitPricePaise");
   validatePositiveNumber(amount, "amount");
 
+  if (await isOrderConfirmed(orderId)) {
+    return { txHash: null };
+  }
+
   const quantityBigInt = BigInt(Math.round(quantity));
   const unitPriceBigInt = BigInt(Math.round(unitPricePaise));
   const amountBigInt = BigInt(Math.round(amount));
 
-  return enqueueWalletTx(async (nonce) => {
+  const result = await enqueueWalletTx(async (nonce) => {
     const tx = await orderLog.logConfirmedOrder(
       orderId,
       companyAddr,
@@ -253,15 +255,14 @@ export async function logConfirmedOrderOnChain(payload: {
 
     return { txHash: receipt.hash };
   });
+
+  await waitUntil(
+    () => isOrderConfirmed(orderId),
+    `confirmation of order ${orderId}`
+  );
+
+  return result;
 }
-
-/* ============================================================
-   ESCROW HASH
-
-   Razorpay IDs and payment info stay off-chain in MongoDB.
-   Only a keccak256 hash of those values is written on-chain,
-   so we can later prove the MongoDB record hasn't been altered.
-   ============================================================ */
 
 export function hashEscrowPayload(payload: {
   orderId: string;
@@ -287,25 +288,26 @@ export function hashEscrowPayload(payload: {
   return ethers.keccak256(encoded);
 }
 
-/* ============================================================
-   LOG ESCROW FUNDED
-
-   Called only after payment signature verified, stock reserved,
-   escrow marked funded, and logConfirmedOrderOnChain has already
-   succeeded for this order.
-   ============================================================ */
-
 export async function logEscrowFundedOnChain(payload: {
   orderId: string;
   razorpayOrderId: string;
   razorpayPaymentId: string;
   amountPaidPaise: number;
-}): Promise<{ txHash: string; dataHash: string }> {
+}): Promise<{ txHash: string | null; dataHash: string }> {
   validateOrderLogAddress();
 
   const dataHash = hashEscrowPayload(payload);
 
-  return enqueueWalletTx(async (nonce) => {
+  await waitUntil(
+    () => isOrderConfirmed(payload.orderId),
+    `confirmation of order ${payload.orderId}`
+  );
+
+  if (await isEscrowFunded(payload.orderId)) {
+    return { txHash: null, dataHash };
+  }
+
+  const result = await enqueueWalletTx(async (nonce) => {
     const tx = await orderLog.logEscrowFunded(payload.orderId, dataHash, { nonce });
 
     const receipt = await tx.wait();
@@ -313,16 +315,16 @@ export async function logEscrowFundedOnChain(payload: {
       throw new Error("Escrow-funded transaction failed: no receipt returned.");
     }
 
-    return { txHash: receipt.hash, dataHash };
+    return { txHash: receipt.hash };
   });
+
+  await waitUntil(
+    () => isEscrowFunded(payload.orderId),
+    `escrow funding of order ${payload.orderId}`
+  );
+
+  return { txHash: result.txHash, dataHash };
 }
-
-/* ============================================================
-   TRANCHE HASH
-
-   Deterministic hash of orderId, tranche type, amount, and a
-   release timestamp generated immediately before the tx.
-   ============================================================ */
 
 export function hashTranchePayload(payload: {
   orderId: string;
@@ -351,14 +353,6 @@ export function hashTranchePayload(payload: {
   return ethers.keccak256(encoded);
 }
 
-/* ============================================================
-   LOG TRANCHE RELEASE
-
-   Valid tranche types: shipment, delivery.
-   shipment fires once invoice is generated; delivery fires once
-   delivery is confirmed. Requires escrow already funded.
-   ============================================================ */
-
 export async function logTrancheReleasedOnChain(payload: {
   orderId: string;
   type: "shipment" | "delivery";
@@ -378,6 +372,13 @@ export async function logTrancheReleasedOnChain(payload: {
   }
 
   validatePositiveNumber(payload.amount, "tranche amount");
+
+  await waitUntil(
+    async () =>
+      (await isOrderConfirmed(payload.orderId)) &&
+      (await isEscrowFunded(payload.orderId)),
+    `escrow state of order ${payload.orderId}`
+  );
 
   const releasedAt = Date.now();
   const dataHash = hashTranchePayload({
