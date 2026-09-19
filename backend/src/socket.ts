@@ -130,7 +130,7 @@ async function autoSendCropReport(
 export function initSocket(httpServer: HTTPServer) {
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: "http://localhost:5173",
+      origin: "https://ayurherb-i3oe.onrender.com",
       methods: ["GET", "POST"],
     },
   });
