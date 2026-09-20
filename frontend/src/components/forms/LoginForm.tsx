@@ -1,9 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import {
+  describeError,
+  LOGIN_BANTER,
+  ProgressLog,
+  useProgressLog,
+} from "./Authprogresslog"
+
 interface LoginFormProps {
   role: "farmer" | "company";
 }
+
+const API_BASE = "https://ayurherb-backend-7yw4.onrender.com";
 
 export default function LoginForm({ role }: LoginFormProps) {
   const [formData, setFormData] = useState({
@@ -11,9 +20,9 @@ export default function LoginForm({ role }: LoginFormProps) {
     password: "",
   });
 
-  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { lines, running, start, push, stop } = useProgressLog(LOGIN_BANTER[role]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -23,12 +32,13 @@ export default function LoginForm({ role }: LoginFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    start("Contacting the AyurHerb server…");
 
     try {
       const url =
         role === "farmer"
-          ? "https://ayurherb-backend-7yw4.onrender.com/api/farmers/login"
-          : "https://ayurherb-backend-7yw4.onrender.com/api/companies/login";
+          ? `${API_BASE}/api/farmers/login`
+          : `${API_BASE}/api/companies/login`;
 
       const res = await fetch(url, {
         method: "POST",
@@ -36,32 +46,32 @@ export default function LoginForm({ role }: LoginFormProps) {
         body: JSON.stringify(formData),
       });
 
+      stop();
+      push("success", "Server answered.");
+
       if (!res.ok) {
-        const error = (await res.json()) as { error?: string };
+        const error = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(error.error || "Login failed");
       }
 
       const data: { token: string; [key: string]: unknown } = await res.json();
+      push("success", "Credentials accepted.");
 
-if (role === "farmer") {
-  localStorage.setItem("farmerToken", data.token);
-  localStorage.setItem("farmer", JSON.stringify(data.farmer));
-} else {
-  localStorage.setItem("companyToken", data.token);
-  localStorage.setItem("company", JSON.stringify(data.company));
-}
+      if (role === "farmer") {
+        localStorage.setItem("farmerToken", data.token);
+        localStorage.setItem("farmer", JSON.stringify(data.farmer));
+      } else {
+        localStorage.setItem("companyToken", data.token);
+        localStorage.setItem("company", JSON.stringify(data.company));
+      }
 
-
-
-      setMessage("✅ Login successful!");
+      push("success", "Session saved on this device.");
+      push("info", "Opening your dashboard…");
 
       setTimeout(() => navigate(`/${role}-dashboard`), 1500);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setMessage("❌ " + err.message);
-      } else {
-        setMessage("❌ An unknown error occurred");
-      }
+      stop();
+      push("error", describeError(err, "Login failed"));
     } finally {
       setLoading(false);
     }
@@ -96,14 +106,14 @@ if (role === "farmer") {
 
         <button
           type="submit"
-          className="bg-green-600 text-white px-4 py-2 rounded w-full"
+          className="bg-green-600 text-white px-4 py-2 rounded w-full disabled:opacity-70"
           disabled={loading}
         >
-          {loading ? "Logging in..." : "Login"}
+          {loading ? "Logging in…" : "Login"}
         </button>
       </form>
 
-      {message && <p className="mt-3 text-red-600">{message}</p>}
+      <ProgressLog lines={lines} running={running} />
     </div>
   );
 }

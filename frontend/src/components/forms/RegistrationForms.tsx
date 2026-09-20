@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import {
+  describeError,
+  ProgressLog,
+  REGISTER_BANTER,
+  useProgressLog,
+} from "./Authprogresslog"
+
 interface Farmer {
   name: string;
   contact: string;
@@ -20,6 +27,8 @@ interface RegistrationFormProps {
   role: "farmer" | "company";
   cropOptions?: string[];
 }
+
+const API_BASE = "https://ayurherb-backend-7yw4.onrender.com";
 
 export default function RegistrationForms({ role, cropOptions }: RegistrationFormProps) {
   const [formData, setFormData] = useState({
@@ -41,6 +50,7 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
   const [loading, setLoading] = useState(false);
   const [registeredData, setRegisteredData] = useState<Farmer | Company | null>(null);
   const navigate = useNavigate();
+  const { lines, running, start, push, stop } = useProgressLog(REGISTER_BANTER[role]);
 
   useEffect(() => {
     if (role !== "farmer") return;
@@ -80,6 +90,7 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setMessage("");
 
     if (!isContactValid(formData.contact)) {
       setMessage("❌ Enter a valid 10-digit Indian mobile number");
@@ -92,11 +103,22 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
     }
 
     setLoading(true);
+    start("Sending your details to the AyurHerb server…");
+
+    if (role === "farmer") {
+      push(
+        "info",
+        coords
+          ? "Farm location attached to your registration."
+          : "No farm location attached. You can add it later from My Crops."
+      );
+    }
+
     try {
       const url =
         role === "farmer"
-          ? "https://ayurherb-backend-7yw4.onrender.com/api/farmers/register"
-          : "https://ayurherb-backend-7yw4.onrender.com/api/companies/register";
+          ? `${API_BASE}/api/farmers/register`
+          : `${API_BASE}/api/companies/register`;
 
       const payload =
         role === "farmer"
@@ -127,12 +149,16 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
         body: JSON.stringify(payload),
       });
 
+      stop();
+      push("success", "Server answered.");
+
       if (!res.ok) {
-        const error = await res.json();
+        const error = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(error.error || "Something went wrong");
       }
 
       const data = await res.json();
+      push("success", "Account created.");
 
       localStorage.setItem("token", data.token);
 
@@ -144,7 +170,9 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
         localStorage.setItem("company", JSON.stringify(data.company));
       }
 
-      setMessage("✅ Registration successful!");
+      push("success", "Session saved on this device.");
+      push("info", "Opening your dashboard…");
+
       setRegisteredData(data[role]);
       setFormData({
         name: "",
@@ -160,11 +188,8 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
 
       setTimeout(() => navigate(`/${role}-dashboard`), 1500);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setMessage("❌ " + err.message);
-      } else {
-        setMessage(" An unknown error occurred");
-      }
+      stop();
+      push("error", describeError(err, "Something went wrong"));
     } finally {
       setLoading(false);
     }
@@ -291,14 +316,16 @@ export default function RegistrationForms({ role, cropOptions }: RegistrationFor
 
         <button
           type="submit"
-          className="bg-green-600 text-white px-4 py-2 rounded w-full"
+          className="bg-green-600 text-white px-4 py-2 rounded w-full disabled:opacity-70"
           disabled={loading}
         >
-          {loading ? "Registering..." : "Register"}
+          {loading ? "Registering…" : "Register"}
         </button>
       </form>
 
       {message && <p className="mt-3 text-red-600">{message}</p>}
+
+      <ProgressLog lines={lines} running={running} />
 
       {registeredData && (
         <div className="mt-4 p-3 border rounded bg-gray-100">
