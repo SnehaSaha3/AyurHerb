@@ -9,16 +9,19 @@ export async function generateQrCodeDataUrl(
   orderId: string,
   qrToken: string
 ): Promise<string> {
-  const baseUrl =
-    process.env.PUBLIC_APP_URL || "http://localhost:8000";
+  const baseUrl = (
+    process.env.PUBLIC_APP_URL ||
+    "http://localhost:8000"
+  ).replace(/\/+$/, "");
 
-  // The physical QR remains permanent.
-  // The PDF generated at this URL reflects the CURRENT order state.
   const verifyUrl =
-    `${baseUrl}/api/public/verify/${orderId}/${qrToken}/pdf`;
+    `${baseUrl}/api/public/verify/` +
+    `${encodeURIComponent(orderId)}/` +
+    `${encodeURIComponent(qrToken)}/pdf`;
 
   return QRCode.toDataURL(verifyUrl, {
     errorCorrectionLevel: "M",
     width: 400,
+    margin: 2,
   });
 }

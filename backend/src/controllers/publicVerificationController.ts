@@ -757,177 +757,124 @@ export async function generatePublicProvenancePdf(
   res: Response
 ) {
   try {
-    const {
-      orderId,
-      qrToken,
-    } = req.params;
+    const { orderId, qrToken } = req.params;
 
     if (!orderId || !qrToken) {
       return res.status(400).json({
-        error:
-          "Invalid verification link",
-        message:
-          "The QR verification link is incomplete.",
+        error: "Invalid verification link",
+        message: "The QR verification link is incomplete.",
       });
     }
 
-    /*
-     * --------------------------------------------------------
-     * LOAD ORDER
-     * --------------------------------------------------------
-     */
+    // ------------------------------------------------------------
+    // LOAD ORDER
+    // ------------------------------------------------------------
 
-    const order =
-      await Order.findById(orderId)
-        .lean();
+    const order = await Order.findById(orderId).lean();
 
     if (!order) {
       return res.status(404).json({
         error: "Order not found",
-        message:
-          "This AyurHerb verification record does not exist.",
+        message: "This AyurHerb verification record does not exist.",
       });
     }
 
-    /*
-     * --------------------------------------------------------
-     * VALIDATE QR TOKEN
-     * --------------------------------------------------------
-     */
+    // ------------------------------------------------------------
+    // VALIDATE QR TOKEN
+    // ------------------------------------------------------------
 
     if (
       !order.invoice?.qrToken ||
       order.invoice.qrToken !== qrToken
     ) {
       return res.status(403).json({
-        error:
-          "Verification failed",
-        message:
-          "This QR code is invalid or has expired.",
+        error: "Verification failed",
+        message: "This QR code is invalid or has expired.",
       });
     }
 
-    /*
-     * --------------------------------------------------------
-     * LOAD PUBLIC PARTICIPANTS + SHIPMENT
-     * --------------------------------------------------------
-     */
+    // ------------------------------------------------------------
+    // LOAD PUBLIC DATA
+    // ------------------------------------------------------------
 
     const [
       company,
       farmer,
       shipmentRecord,
     ] = await Promise.all([
-      Company.findById(
-        order.companyId
-      ).lean(),
+      Company.findById(order.companyId).lean(),
 
-      Farmer.findById(
-        order.farmerId
-      ).lean(),
+      Farmer.findById(order.farmerId).lean(),
 
       Shipment.findOne({
         orderId: order._id,
       }).lean(),
     ]);
 
-    /*
-     * --------------------------------------------------------
-     * TRANCHES
-     * --------------------------------------------------------
-     */
+    // ------------------------------------------------------------
+    // TRANCHES
+    // ------------------------------------------------------------
 
     const shipmentTranche =
       order.tranches?.find(
         (tranche: any) =>
-          tranche.type ===
-          "shipment"
+          tranche.type === "shipment"
       );
 
     const deliveryTranche =
       order.tranches?.find(
         (tranche: any) =>
-          tranche.type ===
-          "delivery"
+          tranche.type === "delivery"
       );
 
-    /*
-     * --------------------------------------------------------
-     * VERIFIED STATE
-     * --------------------------------------------------------
-     */
-
-    const verified =
-      Boolean(
-        order.chainTxHash
-      ) &&
-      Boolean(
-        order.invoice?.qrToken
-      );
-
-    /*
-     * --------------------------------------------------------
-     * BASIC VALUES
-     * --------------------------------------------------------
-     */
+    // ------------------------------------------------------------
+    // BASIC VALUES
+    // ------------------------------------------------------------
 
     const cropName =
-      order.cropName ||
-      "Unknown crop";
+      order.cropName || "Unknown crop";
 
     const quantity =
-      Number(
-        order.quantity || 0
-      );
+      Number(order.quantity || 0);
 
     const farmerName =
-      farmer?.name ||
-      "Verified farmer";
+      farmer?.name || "Verified farmer";
 
     const companyName =
-      company?.name ||
-      "Verified AyurHerb Buyer";
+      company?.name || "Verified AyurHerb Buyer";
 
     const farmerLocation =
       farmer?.address ||
       "Farm location recorded in AyurHerb";
 
     const currentStatus =
-      String(
-        order.status ||
-          "unknown"
-      );
+      String(order.status || "unknown");
 
-    /*
-     * --------------------------------------------------------
-     * CREATE PDF
-     * --------------------------------------------------------
-     */
+    const verified =
+      Boolean(order.chainTxHash) &&
+      Boolean(order.invoice?.qrToken);
 
-    const doc =
-      new PDFDocument({
-        size: "A4",
-        margin: 48,
+    const shipment =
+      shipmentRecord as any;
 
-        info: {
-          Title:
-            `AyurHerb Crop Journey - ${cropName}`,
+    // ------------------------------------------------------------
+    // CREATE PDF
+    // ------------------------------------------------------------
 
-          Author:
-            "AyurHerb",
-
-          Subject:
-            "Crop Provenance and Supply Chain Record",
-
-          Keywords:
-            "AyurHerb, crop provenance, traceability, supply chain",
-        },
-      });
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 48,
+      info: {
+        Title: `AyurHerb Crop Journey - ${cropName}`,
+        Author: "AyurHerb",
+        Subject: "Crop Provenance and Supply Chain Record",
+        Keywords:
+          "AyurHerb, crop provenance, supply chain",
+      },
+    });
 
     const filename =
-      `AyurHerb-Crop-Journey-${String(
-        order._id
-      )}.pdf`;
+      `AyurHerb-Crop-Journey-${String(order._id)}.pdf`;
 
     res.status(200);
 
@@ -943,88 +890,239 @@ export async function generatePublicProvenancePdf(
 
     doc.pipe(res);
 
-    /*
-     * --------------------------------------------------------
-     * PAGE BACKGROUND + HEADER
-     * --------------------------------------------------------
-     */
+    // ============================================================
+    // PAGE 1
+    // ============================================================
 
     drawPageBackground(doc);
     drawPdfHeader(doc);
 
-    doc.y = 125;
+    let y = 125;
 
-    /*
-     * --------------------------------------------------------
-     * HERO
-     * --------------------------------------------------------
-     */
+    // ------------------------------------------------------------
+    // TITLE
+    // ------------------------------------------------------------
 
     doc
       .font("Helvetica-Bold")
       .fontSize(25)
-      .fillColor(
-        PDF_COLORS.darkGreen
-      )
+      .fillColor(PDF_COLORS.darkGreen)
       .text(
         "Crop Journey",
-        doc.page.margins.left
+        doc.page.margins.left,
+        y
       );
+
+    y += 31;
 
     doc
       .font("Helvetica")
       .fontSize(11)
-      .fillColor(
-        PDF_COLORS.muted
-      )
+      .fillColor(PDF_COLORS.muted)
       .text(
         "Provenance & Supply Chain Record",
         doc.page.margins.left,
-        doc.y + 5
+        y
       );
 
-    doc.moveDown(1);
-
-    /*
-     * Status + order reference.
-     */
+    y += 27;
 
     drawStatusBadge(
       doc,
-      verified
-        ? "VERIFIED"
-        : "UNVERIFIED",
+      verified ? "VERIFIED" : "UNVERIFIED",
       doc.page.margins.left,
-      doc.y
+      y
     );
 
     doc
       .font("Helvetica")
       .fontSize(7.5)
-      .fillColor(
-        PDF_COLORS.muted
-      )
+      .fillColor(PDF_COLORS.muted)
       .text(
-        `Order ${String(
-          order._id
-        )}`,
+        `Order ${String(order._id)}`,
         doc.page.margins.left,
-        doc.y + 27
+        y + 28
       );
 
-    doc.moveDown(2);
+    y += 65;
 
-    /*
-     * --------------------------------------------------------
-     * CROP IDENTITY CARD
-     * --------------------------------------------------------
-     */
+    // ============================================================
+    // CROP IDENTITY
+    // ============================================================
 
-    let y =
-      drawSectionTitle(
+    y = drawSectionTitle(
+      doc,
+      "Crop identity",
+      y
+    );
+
+    drawCard(
+      doc,
+      doc.page.margins.left,
+      y,
+      doc.page.width -
+        doc.page.margins.left -
+        doc.page.margins.right,
+      94
+    );
+
+    drawField(
+      doc,
+      "Crop",
+      cropName,
+      64,
+      y + 15,
+      160
+    );
+
+    drawField(
+      doc,
+      "Quantity",
+      `${quantity.toLocaleString("en-IN")} kg`,
+      235,
+      y + 15,
+      120
+    );
+
+    drawField(
+      doc,
+      "Current status",
+      currentStatus.replace(/_/g, " "),
+      365,
+      y + 15,
+      160
+    );
+
+    drawField(
+      doc,
+      "Order ID",
+      String(order._id),
+      64,
+      y + 56,
+      220
+    );
+
+    drawField(
+      doc,
+      "Order created",
+      formatDate(order.createdAt),
+      300,
+      y + 56,
+      225
+    );
+
+    y += 119;
+
+    // ============================================================
+    // FARM ORIGIN
+    // ============================================================
+
+    y = drawSectionTitle(
+      doc,
+      "Farm origin",
+      y
+    );
+
+    const cropLocation =
+      (order as any).location ||
+      (order as any).farmLocation ||
+      null;
+
+    const farmCardHeight =
+      cropLocation ? 88 : 65;
+
+    drawCard(
+      doc,
+      doc.page.margins.left,
+      y,
+      doc.page.width -
+        doc.page.margins.left -
+        doc.page.margins.right,
+      farmCardHeight
+    );
+
+    drawField(
+      doc,
+      "Farmer",
+      farmerName,
+      64,
+      y + 15,
+      200
+    );
+
+    drawField(
+      doc,
+      "Farm address",
+      farmerLocation,
+      285,
+      y + 15,
+      240
+    );
+
+    if (cropLocation) {
+      drawField(
         doc,
-        "Crop identity"
+        "Recorded crop location",
+        typeof cropLocation === "string"
+          ? cropLocation
+          : `${cropLocation.lat ?? "N/A"}, ${cropLocation.lng ?? "N/A"}`,
+        64,
+        y + 55,
+        460
       );
+    }
+
+    y += farmCardHeight + 24;
+
+    // ============================================================
+    // BUYER
+    // ============================================================
+
+    y = drawSectionTitle(
+      doc,
+      "Buyer",
+      y
+    );
+
+    drawCard(
+      doc,
+      doc.page.margins.left,
+      y,
+      doc.page.width -
+        doc.page.margins.left -
+        doc.page.margins.right,
+      62
+    );
+
+    drawField(
+      doc,
+      "Buyer / company",
+      companyName,
+      64,
+      y + 15,
+      250
+    );
+
+    drawField(
+      doc,
+      "Crop purchased",
+      cropName,
+      330,
+      y + 15,
+      190
+    );
+
+    y += 87;
+
+    // ============================================================
+    // LOGISTICS
+    // ============================================================
+
+    y = drawSectionTitle(
+      doc,
+      "Logistics & pickup",
+      y
+    );
 
     drawCard(
       doc,
@@ -1038,396 +1136,144 @@ export async function generatePublicProvenancePdf(
 
     drawField(
       doc,
-      "Crop",
-      cropName,
+      "Pickup",
+      shipment?.pickup?.scheduledAt
+        ? formatDate(
+            shipment.pickup.scheduledAt
+          )
+        : "Not yet scheduled",
       64,
-      y + 17,
-      160
-    );
-
-    drawField(
-      doc,
-      "Quantity",
-      `${quantity.toLocaleString(
-        "en-IN"
-      )} kg`,
-      235,
-      y + 17,
-      120
-    );
-
-    drawField(
-      doc,
-      "Current status",
-      currentStatus.replace(
-        /_/g,
-        " "
-      ),
-      365,
-      y + 17,
-      160
-    );
-
-    drawField(
-      doc,
-      "Order ID",
-      String(order._id),
-      64,
-      y + 60,
-      220
-    );
-
-    drawField(
-      doc,
-      "Order created",
-      formatDate(
-        order.createdAt
-      ),
-      300,
-      y + 60,
-      225
-    );
-
-    y += 130;
-
-    /*
-     * --------------------------------------------------------
-     * FARM ORIGIN
-     * --------------------------------------------------------
-     */
-
-    y =
-      drawSectionTitle(
-        doc,
-        "Farm origin",
-        y
-      );
-
-    drawCard(
-      doc,
-      doc.page.margins.left,
-      y,
-      doc.page.width -
-        doc.page.margins.left -
-        doc.page.margins.right,
-      100
-    );
-
-    drawField(
-      doc,
-      "Farmer",
-      farmerName,
-      64,
-      y + 18,
+      y + 15,
       200
     );
 
     drawField(
       doc,
-      "Farm address",
-      farmerLocation,
+      "Vehicle",
+      shipment?.vehicle?.vehicleNumber ||
+        "Not assigned",
       285,
-      y + 18,
+      y + 15,
       240
     );
 
-    const cropLocation =
-      (order as any)
-        .location ||
-      (order as any)
-        .farmLocation ||
-      null;
-
-    if (cropLocation) {
-      drawField(
-        doc,
-        "Recorded crop location",
-        cropLocation,
-        64,
-        y + 61,
-        460
-      );
-    }
-
-    y += 125;
-
-    /*
-     * --------------------------------------------------------
-     * BUYER
-     * --------------------------------------------------------
-     */
-
-    y =
-      drawSectionTitle(
-        doc,
-        "Buyer",
-        y
-      );
-
-    drawCard(
-      doc,
-      doc.page.margins.left,
-      y,
-      doc.page.width -
-        doc.page.margins.left -
-        doc.page.margins.right,
-      72
-    );
-
     drawField(
       doc,
-      "Buyer / company",
-      companyName,
+      "Vehicle type",
+      shipment?.vehicle?.vehicleType ||
+        "N/A",
       64,
-      y + 19,
-      250
+      y + 56,
+      200
     );
 
     drawField(
       doc,
-      "Crop purchased",
-      cropName,
-      330,
-      y + 19,
-      190
+      "Driver",
+      shipment?.vehicle?.driverName ||
+        "Not assigned",
+      285,
+      y + 56,
+      240
     );
 
-    y += 97;
+    y += 130;
 
-    /*
-     * --------------------------------------------------------
-     * LOGISTICS & PICKUP
-     * --------------------------------------------------------
-     */
+    // ============================================================
+    // PAGE 2
+    // ============================================================
 
-    y =
-      drawSectionTitle(
-        doc,
-        "Logistics & pickup",
-        y
-      );
+    doc.addPage();
 
-    if (shipmentRecord) {
-      drawCard(
-        doc,
-        doc.page.margins.left,
-        y,
-        doc.page.width -
-          doc.page.margins.left -
-          doc.page.margins.right,
-        100
-      );
+    drawPageBackground(doc);
+    drawPdfHeader(doc);
 
-      drawField(
-        doc,
-        "Scheduled pickup",
-        formatDate(
-          (shipmentRecord as any)
-            .pickup?.scheduledAt
-        ),
-        64,
-        y + 18,
-        200
-      );
+    y = 125;
 
-      drawField(
-        doc,
-        "Vehicle",
-        `${
-          (shipmentRecord as any)
-            .vehicle?.vehicleNumber ||
-          "N/A"
-        } (${
-          (shipmentRecord as any)
-            .vehicle?.vehicleType ||
-          "unspecified"
-        })`,
-        285,
-        y + 18,
-        240
-      );
+    // ============================================================
+    // SUPPLY CHAIN JOURNEY
+    // ============================================================
 
-      drawField(
-        doc,
-        "Driver",
-        (shipmentRecord as any)
-          .vehicle?.driverName ||
-          "N/A",
-        64,
-        y + 61,
-        220
-      );
-
-      drawField(
-        doc,
-        "Distance to farm",
-        (shipmentRecord as any)
-          .distanceKm != null
-          ? `${
-              (shipmentRecord as any)
-                .distanceKm
-            } km`
-          : "N/A",
-        300,
-        y + 61,
-        225
-      );
-
-      y += 125;
-    } else {
-      drawCard(
-        doc,
-        doc.page.margins.left,
-        y,
-        doc.page.width -
-          doc.page.margins.left -
-          doc.page.margins.right,
-        50
-      );
-
-      drawField(
-        doc,
-        "Status",
-        "Shipment not yet assigned",
-        64,
-        y + 18,
-        400
-      );
-
-      y += 75;
-    }
-
-    /*
-     * --------------------------------------------------------
-     * SUPPLY CHAIN JOURNEY
-     * --------------------------------------------------------
-     */
-
-    y =
-      drawSectionTitle(
-        doc,
-        "Supply chain journey",
-        y
-      );
-
-    /*
-     * Order confirmed
-     */
-    y =
-      drawTimelineItem(
-        doc,
-        1,
-        "Order confirmed",
-        order.createdAt,
-        order.chainTxHash
-          ? "Confirmed on blockchain"
-          : "Order recorded",
-        order.chainTxHash,
-        y,
-        false
-      );
-
-    /*
-     * Escrow funded
-     */
-    y =
-      drawTimelineItem(
-        doc,
-        2,
-        "Escrow funded",
-        order.escrow
-          ?.fundedAt,
-        order.escrow
-          ?.escrowChainTxHash
-          ? "Escrow confirmed"
-          : "Pending",
-        order.escrow
-          ?.escrowChainTxHash,
-        y,
-        false
-      );
-
-    /*
-     * Pickup scheduled
-     */
-    y =
-      drawTimelineItem(
-        doc,
-        3,
-        "Pickup scheduled",
-        (shipmentRecord as any)
-          ?.pickup?.scheduledAt,
-        shipmentRecord
-          ? "Scheduled"
-          : "Not yet assigned",
-        null,
-        y,
-        false
-      );
-
-    /*
-     * Shipment milestone
-     */
-    y =
-      drawTimelineItem(
-        doc,
-        4,
-        "Shipment tranche released",
-        shipmentTranche
-          ?.releasedAt,
-        shipmentTranche
-          ?.status ||
-          "Pending",
-        shipmentTranche
-          ?.chainTxHash,
-        y,
-        false
-      );
-
-    /*
-     * Delivery milestone
-     */
-    y =
-      drawTimelineItem(
-        doc,
-        5,
-        "Delivery tranche released",
-        deliveryTranche
-          ?.releasedAt,
-        deliveryTranche
-          ?.status ||
-          "Pending",
-        deliveryTranche
-          ?.chainTxHash,
-        y,
-        true
-      );
-
-    /*
-     * --------------------------------------------------------
-     * PAGE BREAK IF NEEDED
-     * --------------------------------------------------------
-     */
-
-    ensureSpace(
+    y = drawSectionTitle(
       doc,
-      180
+      "Supply chain journey",
+      y
     );
 
-    /*
-     * --------------------------------------------------------
-     * ESCROW / MILESTONES
-     * --------------------------------------------------------
-     */
+    y = drawTimelineItem(
+      doc,
+      1,
+      "Order confirmed",
+      order.createdAt,
+      order.chainTxHash
+        ? "Confirmed on blockchain"
+        : "Order recorded",
+      order.chainTxHash,
+      y,
+      false
+    );
 
-    y = doc.y + 10;
+    y = drawTimelineItem(
+      doc,
+      2,
+      "Escrow funded",
+      order.escrow?.fundedAt,
+      order.escrow?.escrowChainTxHash
+        ? "Escrow confirmed"
+        : "Pending",
+      order.escrow?.escrowChainTxHash,
+      y,
+      false
+    );
 
-    y =
-      drawSectionTitle(
-        doc,
-        "Escrow & milestone status",
-        y
-      );
+    y = drawTimelineItem(
+      doc,
+      3,
+      "Pickup scheduled",
+      shipment?.pickup?.scheduledAt,
+      shipment?.pickup?.scheduledAt
+        ? "Scheduled"
+        : "Not yet scheduled",
+      null,
+      y,
+      false
+    );
+
+    y = drawTimelineItem(
+      doc,
+      4,
+      "Shipment tranche released",
+      shipmentTranche?.releasedAt,
+      shipmentTranche?.status ||
+        "Pending",
+      shipmentTranche?.chainTxHash,
+      y,
+      false
+    );
+
+    y = drawTimelineItem(
+      doc,
+      5,
+      "Delivery tranche released",
+      deliveryTranche?.releasedAt,
+      deliveryTranche?.status ||
+        "Pending",
+      deliveryTranche?.chainTxHash,
+      y,
+      true
+    );
+
+    y += 10;
+
+    // ============================================================
+    // ESCROW
+    // ============================================================
+
+    y = drawSectionTitle(
+      doc,
+      "Escrow & milestone status",
+      y
+    );
 
     drawCard(
       doc,
@@ -1436,18 +1282,17 @@ export async function generatePublicProvenancePdf(
       doc.page.width -
         doc.page.margins.left -
         doc.page.margins.right,
-      115
+      105
     );
 
     drawField(
       doc,
       "Escrow funded",
       formatDate(
-        order.escrow
-          ?.fundedAt
+        order.escrow?.fundedAt
       ),
       64,
-      y + 18,
+      y + 15,
       210
     );
 
@@ -1461,7 +1306,7 @@ export async function generatePublicProvenancePdf(
           }`
         : "Not recorded",
       285,
-      y + 18,
+      y + 15,
       240
     );
 
@@ -1475,36 +1320,30 @@ export async function generatePublicProvenancePdf(
           }`
         : "Not recorded",
       64,
-      y + 61,
+      y + 56,
       240
     );
 
     drawField(
       doc,
       "Journey status",
-      currentStatus.replace(
-        /_/g,
-        " "
-      ),
+      currentStatus.replace(/_/g, " "),
       330,
-      y + 61,
+      y + 56,
       195
     );
 
-    y += 145;
+    y += 130;
 
-    /*
-     * --------------------------------------------------------
-     * BLOCKCHAIN PROVENANCE
-     * --------------------------------------------------------
-     */
+    // ============================================================
+    // BLOCKCHAIN PROVENANCE
+    // ============================================================
 
-    y =
-      drawSectionTitle(
-        doc,
-        "Blockchain provenance",
-        y
-      );
+    y = drawSectionTitle(
+      doc,
+      "Blockchain provenance",
+      y
+    );
 
     drawCard(
       doc,
@@ -1513,173 +1352,120 @@ export async function generatePublicProvenancePdf(
       doc.page.width -
         doc.page.margins.left -
         doc.page.margins.right,
-      155
+      145
     );
 
-    const blockchainRows = [
-      {
-        label:
-          "Order confirmation",
-        value:
-          order.chainTxHash,
-      },
-      {
-        label:
-          "Escrow funding",
-        value:
-          order.escrow
-            ?.escrowChainTxHash,
-      },
-      {
-        label:
-          "Shipment release",
-        value:
-          shipmentTranche
-            ?.chainTxHash,
-      },
-      {
-        label:
-          "Delivery release",
-        value:
-          deliveryTranche
-            ?.chainTxHash,
-      },
-    ];
-
-    let blockchainY =
-      y + 18;
-
-    for (
-      const row of blockchainRows
-    ) {
-      doc
-        .font("Helvetica")
-        .fontSize(7)
-        .fillColor(
-          PDF_COLORS.muted
-        )
-        .text(
-          row.label.toUpperCase(),
-          64,
-          blockchainY
-        );
-
-      doc
-        .font("Courier")
-        .fontSize(6.5)
-        .fillColor(
-          row.value
-            ? PDF_COLORS.green
-            : PDF_COLORS.muted
-        )
-        .text(
-          row.value
-            ? String(row.value)
-            : "Not available",
-          64,
-          blockchainY + 11,
-          {
-            width: 460,
-          }
-        );
-
-      blockchainY += 31;
-    }
-
-    y += 180;
-
-    /*
-     * --------------------------------------------------------
-     * PUBLIC RECORD NOTE
-     * --------------------------------------------------------
-     */
-
-    ensureSpace(
+    drawField(
       doc,
-      100
+      "Order confirmation",
+      shortHash(order.chainTxHash),
+      64,
+      y + 15,
+      460
     );
 
-    y = doc.y;
+    drawField(
+      doc,
+      "Escrow funding",
+      shortHash(
+        order.escrow?.escrowChainTxHash
+      ),
+      64,
+      y + 48,
+      460
+    );
 
-    doc
-      .roundedRect(
-        doc.page.margins.left,
-        y,
-        doc.page.width -
-          doc.page.margins.left -
-          doc.page.margins.right,
-        76,
-        8
-      )
-      .fillAndStroke(
-        PDF_COLORS.lightGreen,
-        PDF_COLORS.border
-      );
+    drawField(
+      doc,
+      "Shipment release",
+      shortHash(
+        shipmentTranche?.chainTxHash
+      ),
+      64,
+      y + 81,
+      460
+    );
+
+    drawField(
+      doc,
+      "Delivery release",
+      shortHash(
+        deliveryTranche?.chainTxHash
+      ),
+      64,
+      y + 114,
+      460
+    );
+
+    y += 170;
+
+    // ============================================================
+    // PUBLIC VERIFICATION RECORD
+    // ============================================================
+
+    y = drawSectionTitle(
+      doc,
+      "Public verification record",
+      y
+    );
+
+    drawCard(
+      doc,
+      doc.page.margins.left,
+      y,
+      doc.page.width -
+        doc.page.margins.left -
+        doc.page.margins.right,
+      88
+    );
 
     doc
       .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor(
-        PDF_COLORS.darkGreen
-      )
+      .fontSize(10)
+      .fillColor(PDF_COLORS.darkGreen)
       .text(
         "Permanent QR provenance record",
-        doc.page.margins.left + 15,
+        64,
         y + 15
       );
 
     doc
       .font("Helvetica")
       .fontSize(8)
-      .fillColor(
-        PDF_COLORS.muted
-      )
+      .fillColor(PDF_COLORS.muted)
       .text(
-        "The QR code associated with this transaction remains fixed. "
-        + "This document is generated from the current AyurHerb order "
-        + "state, so verified pickup scheduling, shipment, delivery and "
-        + "blockchain events are reflected as the journey progresses.",
-        doc.page.margins.left + 15,
-        y + 32,
+        "This QR code remains permanently associated with " +
+          "this transaction. The verification record reflects " +
+          "the current AyurHerb order, shipment and blockchain state.",
+        64,
+        y + 37,
         {
-          width:
-            doc.page.width -
-            doc.page.margins.left -
-            doc.page.margins.right -
-            30,
+          width: 460,
           lineGap: 2,
         }
       );
 
-    /*
-     * --------------------------------------------------------
-     * FOOTER
-     * --------------------------------------------------------
-     */
+    // ============================================================
+    // FOOTER
+    // ============================================================
 
     drawPdfFooter(doc);
 
-    /*
-     * --------------------------------------------------------
-     * FINISH
-     * --------------------------------------------------------
-     */
+    // ============================================================
+    // FINISH
+    // ============================================================
 
     doc.end();
+
   } catch (error: any) {
     console.error(
       "Public crop journey PDF error:",
       error
     );
 
-    /*
-     * If PDF headers were already sent,
-     * don't attempt to send JSON.
-     */
     if (!res.headersSent) {
       return res.status(500).json({
-        error:
-          "Verification unavailable",
+        error: "Verification unavailable",
         message:
           "The crop journey PDF could not be generated right now.",
       });
@@ -1688,7 +1474,6 @@ export async function generatePublicProvenancePdf(
     res.end();
   }
 }
-
 /*
  * ============================================================
  * PUBLIC HTML PAGE
