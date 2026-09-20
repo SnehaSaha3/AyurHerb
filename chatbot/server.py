@@ -1,9 +1,33 @@
+import logging
+import os
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from agent import AyurMateAgent
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("ayurmate")
+
+
+DEFAULT_ORIGINS = [
+    "https://ayurherb-i3oe.onrender.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+
+def load_allowed_origins() -> list[str]:
+    configured = [
+        origin.strip().rstrip("/")
+        for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
+    return list(dict.fromkeys(DEFAULT_ORIGINS + configured))
 
 
 app = FastAPI(
@@ -15,9 +39,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-    ],
+    allow_origins=load_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,30 +68,29 @@ async def health():
 
 
 @app.post("/query")
-async def query(
-    payload: dict[str, Any]
-):
-
-    question = str(
-        payload.get("question", "")
-    ).strip()
+async def query(payload: dict[str, Any]):
+    question = str(payload.get("question", "")).strip()
 
     if not question:
-        return {
-            "error": "Question is required."
-        }
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Question is required."},
+        )
 
-    farmer = payload.get(
-        "farmer",
-        {}
-    )
+    farmer = payload.get("farmer", {})
 
     if not isinstance(farmer, dict):
         farmer = {}
 
-    result = agent.run(
-        farmer=farmer,
-        question=question,
-    )
-
-    return result
+    try:
+        return await run_in_threadpool(
+            agent.run,
+            farmer=farmer,
+            question=question,
+        )
+    except Exception:
+        logger.exception("AyurMate agent failed")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "AyurMate could not answer right now. Please try again."},
+        )
