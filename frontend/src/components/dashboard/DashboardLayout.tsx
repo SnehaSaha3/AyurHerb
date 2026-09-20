@@ -84,8 +84,6 @@ export default function DashboardLayout({
   sidePanel,
   userType = "Farmer",
   links,
-  farmerName,
-  unreadMessages = 0,
 }: DashboardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -142,9 +140,6 @@ export default function DashboardLayout({
       <AyurHerbAtmosphere />
 
       <div className="relative z-10 h-full">
-        {/* =====================================================
-            MOBILE SIDEBAR
-           ===================================================== */}
         {mobileOpen && (
           <div className="fixed inset-0 z-[100] lg:hidden">
             <div
@@ -163,8 +158,6 @@ export default function DashboardLayout({
                 toggleGroup={toggleGroup}
                 onClose={() => setMobileOpen(false)}
                 navigation={navigation}
-                userType={userType}
-                farmerName={farmerName}
                 unreadMessages={totalUnread}
                 mobile
               />
@@ -172,11 +165,7 @@ export default function DashboardLayout({
           </div>
         )}
 
-        {/* =====================================================
-            MAIN LAYOUT
-           ===================================================== */}
         <div className="flex h-full min-h-0 gap-4 p-3 sm:p-4 lg:gap-5 lg:p-5">
-          {/* SIDEBAR */}
           <aside
             className={`
               hidden h-full shrink-0 lg:block
@@ -201,16 +190,12 @@ export default function DashboardLayout({
                 openGroups={openGroups}
                 toggleGroup={toggleGroup}
                 navigation={navigation}
-                userType={userType}
-                farmerName={farmerName}
                 unreadMessages={totalUnread}
               />
             </div>
           </aside>
 
-          {/* CENTER */}
           <main className="relative flex min-w-0 min-h-0 flex-1 flex-col">
-            {/* Mobile-only sidebar toggle — floats over content, no header bar */}
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
@@ -227,15 +212,13 @@ export default function DashboardLayout({
               <Menu size={19} />
             </button>
 
-            {/* CONTENT */}
-            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1 scrollbar-thin">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1 pt-12 scrollbar-thin lg:pt-0">
               <Outlet />
             </div>
           </main>
 
-          {/* AYURMATE */}
           {showAyurMate && (
-            <aside className="hidden h-full w-[350px] shrink-0 xl:block">
+            <aside className="hidden h-full w-[320px] shrink-0 xl:block 2xl:w-[350px]">
               <div
                 className="
                   h-full overflow-hidden rounded-[28px]
@@ -253,10 +236,6 @@ export default function DashboardLayout({
     </div>
   );
 }
-
-/* =========================================================
-   SIDEBAR
-   ========================================================= */
 
 interface NavItem {
   label: string;
@@ -278,8 +257,6 @@ function Sidebar({
   openGroups,
   toggleGroup,
   navigation,
-  userType,
-  farmerName,
   unreadMessages,
   onClose,
   mobile = false,
@@ -292,15 +269,12 @@ function Sidebar({
   openGroups: Record<string, boolean>;
   toggleGroup: (label: string) => void;
   navigation: NavGroup[];
-  userType: string;
-  farmerName?: string;
   unreadMessages: number;
   onClose?: () => void;
   mobile?: boolean;
 }) {
   return (
     <div className="relative flex h-full min-h-0 flex-col px-3 py-4">
-      {/* BRAND */}
       <div className={`flex shrink-0 items-center ${collapsed ? "justify-center" : "px-2"}`}>
         {!collapsed ? (
           <button
@@ -357,7 +331,6 @@ function Sidebar({
         )}
       </div>
 
-      {/* NAVIGATION */}
       <div className="mt-6 min-h-0 flex-1 overflow-y-auto">
         {navigation.map((group) => {
           const groupOpen = openGroups[group.label] ?? true;
@@ -448,7 +421,6 @@ function Sidebar({
         })}
       </div>
 
-      {/* ACCOUNT */}
       <div className="shrink-0 border-t border-[#dce8dc] pt-3">
         <button
           onClick={() => {
