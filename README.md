@@ -71,8 +71,7 @@ The initial focus is Assam and the Northeast, with scope for expansion as region
 AyurHerb uses a modular architecture that separates the user interface, application API, AI services, and blockchain components.
 
 ```text
-AyurHerb
-│
+AyurHerb/
 ├── frontend/          # React application
 ├── backend/           # Express REST API
 ├── agent-services/    # FastAPI and AI services
@@ -87,8 +86,6 @@ The application backend handles core API operations and database interactions. A
 ## Getting Started
 
 ### Prerequisites
-
-Install the following before starting development:
 
 - [Node.js](https://nodejs.org/)
 - npm
@@ -229,7 +226,7 @@ The project includes smart contracts for crop registration and order logging.
 | `CropRegistry` | `0x279Bb8b9957Ae8bFf6f91c527f19fc20e4844326` |
 | `OrderLog` | `0x10dd95436164690196773Ef6dD8B9CF5991cc831` |
 
-**Important:** Verify the target blockchain network, contract deployment, and corresponding configuration before interacting with these addresses. Contract addresses are network-specific.
+> **Important:** Verify the target blockchain network, contract deployment, and corresponding configuration before interacting with these addresses. Contract addresses are network-specific.
 
 ## Deployment
 
@@ -243,9 +240,6 @@ The current deployment configuration uses Render.
 
 Hosted services may experience temporary downtime. For deployment, configure the required environment variables, frontend origin allowlists, API URLs, and external service credentials.
 
-## Documentation
-
-- [`TEAM_SETUP.md`](./TEAM_SETUP.md) — Team onboarding and environment setup.
 
 ## Contributing
 
@@ -253,7 +247,7 @@ Contributions, feedback, and technical discussions are welcome. Before making ch
 
 ## License
 
-License information has not yet been specified in this README. Refer to the repository for the applicable licensing terms.
+AyurHerb is licensed under the [MIT License](./LICENSE).
 
 ---
 
